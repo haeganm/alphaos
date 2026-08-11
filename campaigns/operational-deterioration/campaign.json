@@ -1,0 +1,93 @@
+{
+  "campaign_id": "operational-deterioration-2026-08",
+  "family_id": "operational_deterioration",
+  "theme": "Signs of operational deterioration visible in quarterly filings predict subsequent underperformance",
+  "rationale": "If a company's working capital is growing faster than its sales, something is accumulating that has not yet been sold or collected. The behavioural claim is that the market underweights balance-sheet detail relative to headline revenue and earnings, so the deterioration shows up in the filing before it shows up in the price. All five variants share that single mechanism, which is why they are one family and one trial count rather than five independent shots.",
+  "hypotheses": [
+    {
+      "hypothesis": "Companies whose inventories accelerate while revenue growth slows subsequently underperform peers",
+      "mechanism": "Inventory building faster than sales means production has outrun demand. Management sees it a quarter before the market prices it, because the market anchors on the revenue headline rather than the balance sheet. The gap should predict negative abnormal returns as the overhang is worked off through discounting.",
+      "falsification": "No negative high-minus-low spread at 21 days after 10bps costs, or a spread whose sign disagrees across the two halves of the sample.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "sub",
+          "a": {"op": "yoy_growth", "x": {"feature": "InventoryNet"}},
+          "b": {"op": "yoy_growth", "x": {"feature": "Revenues"}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Inventory growth alone predicts underperformance, without conditioning on revenue",
+      "mechanism": "The simplest form of the same idea. If the two-legged version works only because of the revenue leg, this variant isolates that. Included specifically so the family cannot claim credit for a result that is really about revenue growth.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {"op": "yoy_growth", "x": {"feature": "InventoryNet"}},
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Receivables growing faster than revenue predicts underperformance",
+      "mechanism": "Receivables outrunning sales suggests revenue is being pulled forward on looser credit terms, or that collection is deteriorating. Same behavioural claim as inventory: the balance sheet reveals the strain before the income statement does.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "sub",
+          "a": {"op": "yoy_growth", "x": {"feature": "AccountsReceivable"}},
+          "b": {"op": "yoy_growth", "x": {"feature": "Revenues"}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "A rising inventory-to-revenue ratio predicts underperformance",
+      "mechanism": "Expresses the same overhang as a ratio rather than a difference of growth rates, which is less sensitive to a single noisy quarter in either component. If the difference-form works and the ratio-form does not, the effect is probably an artifact of how the growth rates are scaled rather than a real economic signal.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "yoy_growth",
+          "x": {"op": "div", "a": {"feature": "InventoryNet"}, "b": {"feature": "Revenues"}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Earnings growing while operating cash flow deteriorates predicts underperformance",
+      "mechanism": "The classic accruals divergence. Earnings that are not converting into cash are being produced by accounting choices rather than trade, and the market is slower to discount accrual-heavy earnings than cash-backed ones.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "sub",
+          "a": {"op": "yoy_growth", "x": {"feature": "NetIncomeLoss"}},
+          "b": {"op": "yoy_growth", "x": {"feature": "OperatingCashFlow"}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    }
+  ]
+}

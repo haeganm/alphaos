@@ -1,0 +1,64 @@
+{
+  "campaign_id": "earnings-reaction-drift-2026-08",
+  "family_id": "pead",
+  "theme": "Post-earnings-announcement drift in S&P 500 names, measured from the market's own reaction",
+  "rationale": "PEAD is among the most replicated anomalies in the literature: prices continue to drift in the direction of an earnings surprise for weeks after the announcement. The mechanism is slow information diffusion. This campaign measures it from the announcement reaction itself rather than from an accounting surprise measure, which avoids needing the surprise to be knowable at the announcement, and tests whether the effect still exists in the most heavily covered universe in the world. DISCLOSURE: a preliminary version of the unconditional and top/bottom-tercile runs was executed during harness development before this pre-registration, so these hypotheses are not naive. They are registered anyway, with that exposure recorded, because leaving them out of the ledger would understate the search.",
+  "hypotheses": [
+    {
+      "hypothesis": "Stocks with the most positive reaction to their earnings 8-K continue to outperform over the following three months",
+      "mechanism": "Slow diffusion of earnings information: institutional rebalancing, analyst revisions and index flows arrive over weeks, so the initial reaction underreacts to the news. Drift is measured from the close of day +1 onward, after the reaction used to select the group is complete.",
+      "falsification": "No positive abnormal return over days +2 to +61 versus SPY, or an effect that does not survive the shuffled-condition placebo.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_2.02"},
+        "window": [2, 61],
+        "benchmark": "spy",
+        "condition": {"on": "reaction_1d", "select": "top", "fraction": 0.3},
+        "predicted_sign": 1,
+        "min_events": 500
+      }
+    },
+    {
+      "hypothesis": "Stocks with the most negative reaction to their earnings 8-K continue to underperform over the following three months",
+      "mechanism": "The short side of the same diffusion story. Included because PEAD is documented as asymmetric, and because a mechanism that only works on one side needs to explain why.",
+      "falsification": "No negative abnormal return over days +2 to +61 versus SPY.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_2.02"},
+        "window": [2, 61],
+        "benchmark": "spy",
+        "condition": {"on": "reaction_1d", "select": "bottom", "fraction": 0.3},
+        "predicted_sign": -1,
+        "min_events": 500
+      }
+    },
+    {
+      "hypothesis": "Drift after a strong earnings reaction is concentrated in the first month rather than spread over three",
+      "mechanism": "If diffusion drives the effect, most of it should resolve while the news is still being absorbed. A shorter window is also a cleaner test because it is less exposed to the next quarter's announcement contaminating the tail.",
+      "falsification": "No positive abnormal return over days +2 to +21 versus SPY.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_2.02"},
+        "window": [2, 21],
+        "benchmark": "spy",
+        "condition": {"on": "reaction_1d", "select": "top", "fraction": 0.3},
+        "predicted_sign": 1,
+        "min_events": 500
+      }
+    },
+    {
+      "hypothesis": "Drift after a strong earnings reaction persists when measured against the sector rather than the market",
+      "mechanism": "A market benchmark leaves sector exposure in the abnormal return, so a result could be sector rotation following a sector-wide earnings season. Benchmarking against the sector ETF removes that explanation.",
+      "falsification": "No positive abnormal return over days +2 to +61 versus the sector ETF.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_2.02"},
+        "window": [2, 61],
+        "benchmark": "sector",
+        "condition": {"on": "reaction_1d", "select": "top", "fraction": 0.3},
+        "predicted_sign": 1,
+        "min_events": 500
+      }
+    }
+  ]
+}
