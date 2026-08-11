@@ -1,5 +1,53 @@
 # Campaign post-mortem: post-earnings-announcement drift
 
+> **REVISED 2026-08-11 after the harness hardening pass. The original reading of
+> this campaign was wrong and is corrected below.**
+>
+> Three harness bugs affected these numbers. The decisive one: t-statistics and
+> bootstrap intervals were computed on event arrays ordered by CIK (and, after
+> conditioning, by reaction rank within quarter) rather than by date. The
+> Newey-West correction assumes temporal adjacency, so it was correcting for
+> the wrong dependence structure entirely. Records are now sorted by date
+> before any inference.
+>
+> | Trial | Before | After |
+> |---|---|---|
+> | 1 top 30%, +2..+61 | +0.20%, t 1.05 | +0.37%, t 2.04 |
+> | 2 bottom 30%, +2..+61 | +0.67%, t 3.16 | +0.15%, t 0.78 |
+> | 3 top 30%, +2..+21 | +0.38%, t 3.94, **placebo t 3.64** | +0.29%, t 2.79, **placebo t 0.54** |
+> | 4 top 30% vs sector | +0.06%, t 0.33 | +0.21%, t 1.38 |
+>
+> All four verdicts remain FAILED, but for materially different reasons, and
+> two claims in the original write-up do not survive:
+>
+> **The placebo did not catch trial 3.** The original text called this campaign
+> "the best advert for the placebo" because a shuffled condition also reached
+> t = 3.64. That 3.64 was itself the ordering artifact. With the fix the
+> placebo sits at t = 0.54 and trial 3 passes it cleanly. Trial 3 now passes
+> sign, significance, the bootstrap interval, concentration, breadth, subperiod
+> agreement **and** the placebo, and fails only the deflated Sharpe
+> (0.777 against a 0.95 floor). It is a candidate that cannot clear the
+> multiple-testing hurdle for a family of four, which is a much narrower claim
+> than "the drift belongs to earnings events generally".
+>
+> **Trial 2's reversal was mostly an artifact.** The apparently significant
+> +0.67% (t = 3.16) reversal after negative reactions falls to +0.15%
+> (t = 0.78) once inference runs on date-ordered data. The "worth investigating
+> instead" note about short-horizon reversal is withdrawn: there is no longer a
+> result there to investigate.
+>
+> The structural baseline drift is still real and still the main caution for
+> event studies here. What has changed is that the unconditioned-study placebo
+> is now a matched random-date placebo (same names, same window length,
+> non-filing dates) rather than a bit-identical rerun of the experiment, which
+> is what it silently was before.
+>
+> Everything below the line is the original write-up, preserved. Where it
+> conflicts with this note, this note is correct.
+
+---
+
+
 - **Campaign:** `earnings-reaction-drift-2026-08`
 - **Family:** `pead` (4 distinct trials)
 - **Data:** 21,902 earnings 8-Ks (item 2.02), 583 names, 2010-01 to 2022-06

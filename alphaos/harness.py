@@ -23,6 +23,7 @@ cross-sections is a data artifact, not a discovery.
 from __future__ import annotations
 
 import bisect
+import os
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -30,6 +31,7 @@ import numpy as np
 import polars as pl
 
 from . import panel as panel_mod
+from . import paths
 from . import spec as spec_mod
 from . import stats
 from .ingest import prices as prices_mod
@@ -42,11 +44,20 @@ EPS = 1e-12
 # wide panel
 # ---------------------------------------------------------------------------
 
-def load_wide(*, embargo: bool = False, lag_days: int = 0,
-              prices_path: str = "data/prices.parquet") -> pl.DataFrame:
+def load_wide(*, embargo: bool = False, lag_days: int = 0, all_data: bool = False,
+              prices_path=paths.PRICES, universe_path=paths.UNIVERSE) -> pl.DataFrame:
     """One row per (rebalance, ticker): fundamentals by lag, market features,
-    forward returns. Built from the panel, never from raw filings."""
-    p = panel_mod.load(embargo=embargo)
+    forward returns. Built from the panel, never from raw filings.
+
+    lag_days must match the spec being run. It shifts the entry bar, so a frame
+    built at one lag cannot be reused for a spec registered at another -- that
+    mismatch previously meant discovery ran at lag 0 while the holdout ran at
+    the registered lag, evaluating the same frozen spec two different ways.
+
+    all_data concatenates discovery + embargo and is reserved for grading
+    already-frozen specs (see panel.load_all).
+    """
+    p = panel_mod.load_all() if all_data else panel_mod.load(embargo=embargo)
     tags = p["tag"].unique().to_list()
     base = (p.select(["asof", "ticker", "cik", "gics_sector"])
              .unique(subset=["asof", "ticker"]))
@@ -60,7 +71,7 @@ def load_wide(*, embargo: bool = False, lag_days: int = 0,
     dates = sorted(base["asof"].unique().to_list())
     mkt = panel_mod.market_table(px, dates, lag_days=lag_days)
 
-    uni = pl.read_parquet("data/universe.parquet")
+    uni = pl.read_parquet(universe_path)
     if "price_ticker" in uni.columns:
         m = dict(uni.select(["ticker", "price_ticker"]).unique().rows())
         base = base.with_columns(pl.col("ticker").replace(m).alias("price_ticker"))
@@ -74,7 +85,7 @@ def load_wide(*, embargo: bool = False, lag_days: int = 0,
             (pl.col("SharesOutstanding_q0") * pl.col("entry_close")).alias("mktcap"))
     else:
         out = out.with_columns(pl.lit(None, dtype=pl.Float64).alias("mktcap"))
-    return out
+    return out.with_columns(pl.lit(lag_days).alias("_lag_days"))
 
 
 # ---------------------------------------------------------------------------
@@ -150,26 +161,43 @@ def eval_expr(node: dict, shift: int = 0) -> pl.Expr:
 # ---------------------------------------------------------------------------
 
 def _neutralize(sig: np.ndarray, sectors: np.ndarray, size: np.ndarray,
-                beta: np.ndarray, which: list[str]) -> np.ndarray:
+                beta: np.ndarray, which: list[str]) -> tuple[np.ndarray, dict]:
     """Residual of the signal after removing the requested exposures.
 
     Without this, "my signal works" often means "my signal is short small-caps
     in a decade when large beat small".
+
+    Returns coverage alongside the residual, because a silently-skipped
+    neutraliser is worse than none at all: when mktcap or beta is entirely
+    missing, the column collapses to a constant, lstsq accepts the
+    rank-deficient design without complaint, and the result is still labelled
+    "neutralised on size". Missing values are mean-imputed, which leaves those
+    names carrying their full raw deviation and pushes them toward the extreme
+    deciles, so the imputed fraction is reported too.
     """
     n = len(sig)
     cols = [np.ones(n)]
+    cover: dict[str, float] = {}
+
     if "sector" in which:
-        for s in sorted(set(sectors))[1:]:          # drop one level, keep intercept
+        levels = sorted(set(sectors))
+        for s in levels[1:]:                        # drop one level, keep intercept
             cols.append((sectors == s).astype(float))
+        known = float(np.mean([s != "UNKNOWN" for s in sectors]))
+        cover["sector"] = known if len(levels) > 1 else 0.0
     if "size" in which:
-        z = np.where(np.isfinite(size) & (size > 0), np.log(np.maximum(size, EPS)), np.nan)
-        cols.append(np.nan_to_num(z, nan=float(np.nanmean(z)) if np.isfinite(z).any() else 0.0))
+        ok = np.isfinite(size) & (size > 0)
+        z = np.where(ok, np.log(np.maximum(size, EPS)), np.nan)
+        cover["size"] = float(ok.mean())
+        cols.append(np.nan_to_num(z, nan=float(np.nanmean(z)) if ok.any() else 0.0))
     if "beta" in which:
-        b = np.where(np.isfinite(beta), beta, np.nan)
-        cols.append(np.nan_to_num(b, nan=float(np.nanmean(b)) if np.isfinite(b).any() else 0.0))
+        ok = np.isfinite(beta)
+        cover["beta"] = float(ok.mean())
+        cols.append(np.where(ok, beta, float(np.nanmean(beta)) if ok.any() else 0.0))
+
     X = np.column_stack(cols)
     coef, *_ = np.linalg.lstsq(X, sig, rcond=None)
-    return sig - X @ coef
+    return sig - X @ coef, cover
 
 
 def _winsorize(x: np.ndarray, frac: float) -> np.ndarray:
@@ -179,23 +207,32 @@ def _winsorize(x: np.ndarray, frac: float) -> np.ndarray:
     return np.clip(x, lo, hi)
 
 
-def _factor_windows(fac: pl.DataFrame, entries: list[date]) -> dict[date, dict]:
-    """Compound daily factor returns over each holding period [entry_t, entry_t+1)."""
+def _factor_windows(fac: pl.DataFrame, entries: list[date],
+                    horizon: int) -> dict[date, dict]:
+    """Compound daily factor returns over each holding period [entry_t, entry_t+1).
+
+    Windows grossly longer than the nominal horizon are dropped. Previously a
+    synthetic 400-day sentinel was appended to close the last window, pairing
+    400 days of compounded market return with a 21-day strategy return -- an
+    enormous leverage point in the alpha regression. The same thing happened
+    either side of any skipped rebalance.
+    """
     fd = fac["date"].to_list()
-    names = [c for c in ("mkt_rf", "smb", "hml", "mom", "rf") if c in fac.columns]
+    names = [c for c in ("mkt_rf", "smb", "hml", "mom") if c in fac.columns]
     arrs = {n: np.asarray(fac[n].to_list(), dtype=float) for n in names}
     out = {}
     for i in range(len(entries) - 1):
         a = bisect.bisect_left(fd, entries[i])
         b = bisect.bisect_left(fd, entries[i + 1])
-        if b <= a:
+        n_days = b - a
+        if n_days <= 0 or not (0.5 * horizon <= n_days <= 1.5 * horizon):
             continue
         out[entries[i]] = {n: float(np.nanprod(1.0 + arrs[n][a:b]) - 1.0) for n in names}
     return out
 
 
 def run_cross_sectional(spec: dict, wide: pl.DataFrame, *,
-                        factors_path: str = "data/factors.parquet",
+                        factors_path=paths.FACTORS,
                         shuffle_seed: int | None = None) -> dict:
     """shuffle_seed permutes the signal within each cross-section, destroying
     its link to returns while preserving every other property of the test. It
@@ -206,6 +243,16 @@ def run_cross_sectional(spec: dict, wide: pl.DataFrame, *,
     fwd_col = f"fwd_{horizon}"
     interval = spec_mod.INTERVALS[s["rebalance"]]
     step = max(1, interval // 21)
+
+    # The frame carries the lag it was built at; running a spec against a frame
+    # built at a different lag silently evaluates different entry dates.
+    if "_lag_days" in wide.columns and wide.height:
+        built_lag = int(wide["_lag_days"][0])
+        if built_lag != s["lag_days"]:
+            raise ValueError(
+                f"panel was built with lag_days={built_lag} but this spec "
+                f"registered lag_days={s['lag_days']}; rebuild with "
+                f"load_wide(lag_days={s['lag_days']})")
 
     df = wide.with_columns(eval_expr(s["signal"]).alias("signal"))
     all_dates = sorted(df["asof"].unique().to_list())
@@ -224,15 +271,20 @@ def run_cross_sectional(spec: dict, wide: pl.DataFrame, *,
         members = int(df.filter(pl.col("asof") == d).height)
         n = g.height
         if n < s["min_names"]:
+            # Reset the book. Carrying prev_w across a gap charged no turnover
+            # for the round trip and implied the portfolio was held through a
+            # period whose return is not in the series.
             per_period.append({"asof": d, "n": n, "members": members, "skipped": True})
+            prev_w = {}
             continue
 
         sig = _winsorize(np.asarray(g["signal"].to_list(), dtype=float), s["winsorize"])
         fwd = np.asarray(g[fwd_col].to_list(), dtype=float)
         if rng is not None:
             sig = rng.permutation(sig)
+        cover: dict = {}
         if s["neutralize"]:
-            sig = _neutralize(
+            sig, cover = _neutralize(
                 sig,
                 np.asarray(g["gics_sector"].fill_null("UNKNOWN").to_list()),
                 np.asarray(g["mktcap"].to_list(), dtype=float),
@@ -260,7 +312,7 @@ def run_cross_sectional(spec: dict, wide: pl.DataFrame, *,
             "gross": gross, "cost": cost, "net": gross - cost, "turnover": traded,
             "ic": stats.spearman_ic(sig, fwd),
             "long_ret": float(fwd[hi_idx].mean()), "short_ret": float(fwd[lo_idx].mean()),
-            "entry_date": g["entry_date"].min(),
+            "entry_date": g["entry_date"].min(), "neutralize_coverage": cover,
         })
 
     used = [p for p in per_period if not p["skipped"]]
@@ -296,34 +348,38 @@ def run_cross_sectional(spec: dict, wide: pl.DataFrame, *,
         "sharpe": stats.sharpe(signed),
         "mean_signed": float(np.mean(signed)),
         "mean_ic": float(np.nanmean(ic)), "t_ic": stats.newey_west_tstat(ic[np.isfinite(ic)]),
-        "hit_rate": float(np.mean(net > 0)),
+        "hit_rate": float(np.mean(signed > 0)),      # of the tradable series
         "mean_turnover": float(np.mean([p["turnover"] for p in used])),
         "mean_cost": float(np.mean([p["cost"] for p in used])),
         "max_drawdown": stats.max_drawdown(signed),
         "mean_names": float(np.mean([p["n"] for p in used])),
         "coverage": float(np.mean([p["n"] / max(p["members"], 1) for p in used])),
         "skipped_periods": len(per_period) - len(used),
+        "neutralize_coverage": {
+            k: float(np.mean([p["neutralize_coverage"].get(k, 0.0) for p in used]))
+            for k in (s["neutralize"] or [])},
         "returns": [float(x) for x in net],
         "returns_signed": [float(x) for x in signed],
         "period_dates": [str(p["asof"]) for p in used],
     }
-    lo, hi = stats.block_bootstrap_mean_ci(net, block=max(3, int(len(net) ** (1 / 3))))
+    lo, hi = stats.block_bootstrap_mean_ci(signed)   # one shared block rule
     res["mean_net_ci"] = [lo, hi]
 
     try:
-        res.update(_factor_alpha(net, entries, factors_path))
+        res.update(_factor_alpha(net, entries, factors_path, horizon))
     except Exception as exc:                        # noqa: BLE001
         res["factor_alpha_error"] = str(exc)
     return res
 
 
-def _factor_alpha(net: np.ndarray, entries: list[date], factors_path: str) -> dict:
+def _factor_alpha(net: np.ndarray, entries: list[date], factors_path,
+                  horizon: int) -> dict:
     """Alpha after Fama-French 3 + momentum. A spread that loses its t-stat
     here is a factor bet someone already charges 5bps for."""
     import statsmodels.api as sm
 
     fac = pl.read_parquet(factors_path)
-    windows = _factor_windows(fac, entries + [entries[-1] + timedelta(days=400)])
+    windows = _factor_windows(fac, entries, horizon)
     rows = [(net[i], windows[e]) for i, e in enumerate(entries) if e in windows]
     if len(rows) < 12:
         return {"factor_alpha_error": "too few overlapping factor windows"}
@@ -377,13 +433,42 @@ def _parse_accepted(s: str | None) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
-def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
-                    prices_path: str = "data/prices.parquet",
-                    universe_path: str = "data/universe.parquet",
-                    embargo: bool = False, shuffle_seed: int | None = None) -> dict:
+_SERIES_CACHE: dict = {}
+
+
+def _prepared_series(prices_path) -> dict:
+    """Per-ticker (dates, closes, returns), built once and cached.
+
+    Rebuilding this from the 5.6M-bar parquet on every call cost ~10s a time,
+    and the skeptic runs a placebo for every event study, so a four-hypothesis
+    campaign paid for it eight times.
+    """
+    key = (str(prices_path), os.path.getmtime(prices_path))
+    hit = _SERIES_CACHE.get(key)
+    if hit is not None:
+        return hit
+    px = pl.read_parquet(prices_path).sort(["ticker", "date"])
+    out = {}
+    for k, d in px.partition_by("ticker", as_dict=True).items():
+        t = k[0] if isinstance(k, tuple) else k
+        closes = np.asarray(d["close"].to_list(), dtype=float)
+        rets = np.concatenate([[np.nan], closes[1:] / closes[:-1] - 1.0])
+        dates = d["date"].to_list()
+        out[t] = (dates, closes, rets, {dd: j for j, dd in enumerate(dates)})
+    _SERIES_CACHE.clear()          # only ever keep the current build
+    _SERIES_CACHE[key] = out
+    return out
+
+
+def run_event_study(spec: dict, *, events_path=paths.EVENTS,
+                    prices_path=paths.PRICES,
+                    universe_path=paths.UNIVERSE,
+                    embargo: bool = False, all_data: bool = False,
+                    shuffle_seed: int | None = None) -> dict:
     s = spec_mod.validate(spec)
     w0, w1 = s["window"]
     trig = s["event"]["trigger"]
+    lag = s["lag_days"]
 
     ev = pl.read_parquet(events_path)
     if trig.startswith("8k_"):
@@ -395,25 +480,16 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
         ev = ev.filter(pl.col("form") == "10-K")
 
     cut = panel_mod.EMBARGO_START
-    ev = ev.filter(pl.col("filing_date") >= cut if embargo else pl.col("filing_date") < cut)
+    if not all_data:
+        ev = ev.filter(pl.col("filing_date") >= cut if embargo
+                       else pl.col("filing_date") < cut)
     if s.get("start"):
         ev = ev.filter(pl.col("filing_date") >= date.fromisoformat(s["start"]))
+    if s.get("end"):
+        ev = ev.filter(pl.col("filing_date") <= date.fromisoformat(s["end"]))
 
     uni = pl.read_parquet(universe_path)
-    px = pl.read_parquet(prices_path)
-    parts = {(k[0] if isinstance(k, tuple) else k): v
-             for k, v in px.sort(["ticker", "date"]).partition_by("ticker", as_dict=True).items()}
-
-    series: dict[str, tuple[list[date], np.ndarray]] = {}
-    for t, d in parts.items():
-        closes = np.asarray(d["close"].to_list(), dtype=float)
-        series[t] = (d["date"].to_list(), closes)
-
-    def rets(t):
-        dts, c = series[t]
-        return dts, np.concatenate([[np.nan], c[1:] / c[:-1] - 1.0]), c
-
-    spy = rets("SPY") if "SPY" in series else None
+    series = _prepared_series(prices_path)
 
     # cik -> membership intervals, sector, price ticker
     uni_rows = uni.rows(named=True)
@@ -424,6 +500,15 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
 
     records: list[dict] = []
     skipped = 0
+    # For an unconditioned study the placebo has to break the link between the
+    # window and the filing itself. Keeping the same names and the same rough
+    # period but jittering the entry to a date that is NOT a filing date
+    # measures the universe's baseline drift over an identical window -- which
+    # is the thing an event study must beat, and is exactly the +0.33% baseline
+    # the earnings campaign turned up. Without this the "placebo" for an
+    # unconditioned study was a bit-identical rerun of the experiment.
+    jitter = (np.random.default_rng(shuffle_seed)
+              if shuffle_seed is not None and not s.get("condition") else None)
 
     for row in ev.rows(named=True):
         recs = by_cik.get(row["cik"])
@@ -446,13 +531,19 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
             # close rather than guessing an intraday time in our favour.
             known = session_end_utc(fd) + timedelta(seconds=1)
 
-        dts, r_stock, closes = rets(tkr)
+        dts, closes, r_stock, _ = series[tkr]
         i = entry_index(dts, known)
-        if i is None or i + w1 >= len(dts):
+        # lag_days models an implementation delay: the filing is known at the
+        # same instant, but the position is opened that many sessions later.
+        if i is not None and lag:
+            i += lag
+        if i is not None and jitter is not None:
+            off = int(jitter.integers(40, 250)) * (1 if jitter.integers(0, 2) else -1)
+            i += off
+        if i is None or i + w1 >= len(dts) or i < 1:
             skipped += 1
             continue
 
-        bench_t = tkr
         if s["benchmark"] == "sector":
             etf = prices_mod.SECTOR_ETF_MAP.get(rec.get("gics_sector") or "", "SPY")
             bench_t = etf if etf in series else "SPY"
@@ -461,9 +552,7 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
         if bench_t not in series:
             skipped += 1
             continue
-        bd, r_bench, bclose = rets(bench_t)
-        # align benchmark bars to the stock's dates
-        bidx = {d: j for j, d in enumerate(bd)}
+        _, bclose, r_bench, bidx = series[bench_t]
         js = [bidx.get(dts[k]) for k in range(i, min(i + w1 + 1, len(dts)))]
         if any(j is None for j in js):
             skipped += 1
@@ -471,7 +560,12 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
 
         seg_stock = r_stock[i + w0: i + w1 + 1]
         seg_bench = np.asarray([r_bench[j] for j in js[w0:w1 + 1]], dtype=float)
-        if len(seg_stock) != len(seg_bench) or not np.isfinite(seg_stock).all():
+        # Both legs must be checked. Leaving the benchmark unvalidated let a
+        # missing benchmark bar become a zero abnormal return via nansum while
+        # still counting as a full observation.
+        if (len(seg_stock) != len(seg_bench)
+                or not np.isfinite(seg_stock).all()
+                or not np.isfinite(seg_bench).all()):
             skipped += 1
             continue
 
@@ -487,10 +581,9 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
         # Reaction is the first full session after the filing was public. It is
         # only used to split events, and the outcome window starts at +2.
         reaction = None
-        if i + 1 < len(dts) and js[1] is not None:
-            rs, rb = r_stock[i + 1], r_bench[js[1]]
-            if np.isfinite(rs) and np.isfinite(rb):
-                reaction = float(rs - rb)
+        rs, rb = r_stock[i + 1], r_bench[js[1]]
+        if np.isfinite(rs) and np.isfinite(rb):
+            reaction = float(rs - rb)
 
         records.append({
             "ticker": rec["ticker"], "date": fd,
@@ -528,6 +621,12 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
                 "n_events": n, "n_before_condition": n_all,
                 "min_events": s["min_events"], "skipped": skipped}
 
+    # Order by date before any blocked resampling. After conditioning, records
+    # are ordered by reaction rank within a quarter, so moving blocks would
+    # have preserved "similar surprise" adjacency rather than temporal
+    # adjacency -- the wrong dependence structure entirely for the CI that
+    # decides the verdict.
+    records.sort(key=lambda r: r["date"])
     arr = np.asarray([r["bhar"] for r in records], dtype=float)
     signed = arr * s["predicted_sign"]      # see run_cross_sectional
     car_arr = np.asarray([r["car"] for r in records], dtype=float)
@@ -539,7 +638,7 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
         path_n[:len(cum)] += 1
 
     top10 = np.sort(np.abs(arr))[-10:].sum()
-    lo, hi = stats.block_bootstrap_mean_ci(arr, block=max(5, n // 50))
+    lo, hi = stats.block_bootstrap_mean_ci(signed)   # one shared block rule
     n_names = len({r["ticker"] for r in records})
 
     return {
@@ -553,7 +652,7 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
         "t_bhar": stats.newey_west_tstat(arr),
         "mean_bhar_ci": [lo, hi],
         "mean_car": float(car_arr.mean()),
-        "hit_rate": float(np.mean(arr > 0)),
+        "hit_rate": float(np.mean(signed > 0)),      # of the tradable series
         "top10_share": float(top10 / max(np.abs(arr).sum(), EPS)),
         "car_path": [float(x) for x in (path_sum / np.maximum(path_n, 1))],
         "returns": [float(x) for x in arr],
@@ -566,11 +665,13 @@ def run_event_study(spec: dict, *, events_path: str = "data/events.parquet",
 
 # ---------------------------------------------------------------------------
 
-def run(spec: dict, *, wide: pl.DataFrame | None = None, embargo: bool = False) -> dict:
+def run(spec: dict, *, wide: pl.DataFrame | None = None, embargo: bool = False,
+        all_data: bool = False) -> dict:
     """Dispatch. The only entry point any experiment should use."""
     s = spec_mod.validate(spec)
     if s["type"] == "cross_sectional":
         if wide is None:
-            wide = load_wide(embargo=embargo, lag_days=s["lag_days"])
+            wide = load_wide(embargo=embargo, all_data=all_data,
+                             lag_days=s["lag_days"])
         return run_cross_sectional(s, wide)
-    return run_event_study(s, embargo=embargo)
+    return run_event_study(s, embargo=embargo, all_data=all_data)

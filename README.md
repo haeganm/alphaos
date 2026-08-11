@@ -67,12 +67,20 @@ expected base rate, and the reason the ledger exists.
 - `campaigns/operational-deterioration/` — inventory, receivables and accrual
   deterioration. Effects near 5bp/month against 40x that in monthly vol; the
   ratio and difference forms of the same idea produced opposite signs.
-- `campaigns/earnings-reaction-drift/` — PEAD in large caps. One variant
-  reached t = 3.94 with correct sign and broad breadth, and died because the
-  **shuffled-condition placebo reached t = 3.64**: the drift belonged to
-  earnings events generally, not to the selection.
+- `campaigns/earnings-reaction-drift/` — PEAD in large caps. The closest thing
+  to a candidate: one-month drift after a strong earnings reaction passes sign,
+  significance (t = 2.79), the bootstrap interval, concentration, breadth,
+  subperiod agreement and the placebo, and fails only the deflated Sharpe
+  (0.78 against a 0.95 floor) given four trials in the family.
 - `campaigns/_prior-projects/` — mechanisms retired by TechnicalEngine, BTCTA,
   MYOWNTA and Density Desk. All four found no edge; that is the prior.
+
+Both post-mortems carry a revision note from the 2026-08-11 hardening pass.
+Three harness bugs changed the numbers — most importantly, event t-statistics
+were computed on arrays ordered by company rather than by date, so the
+Newey-West correction was correcting for the wrong dependence structure. The
+verdicts did not change; the reasons did, and the corrections are recorded
+rather than quietly absorbed.
 
 ## Honest limitations
 
@@ -96,16 +104,27 @@ expected base rate, and the reason the ledger exists.
 ## Usage
 
 ```bash
+python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
 python scripts/build_data.py            # cold build, ~30-60 min
-python -m pytest tests/ -q              # 38 tests
+python -m pytest tests/ -q              # 78 tests, runs from any directory
 python -c "from alphaos import controls; print(controls.report(controls.run_all()))"
 python scripts/run_campaign.py campaigns/<name>/campaign.json
 python scripts/crossval_asof.py         # external oracle check
+python scripts/backup_registry.py       # mirror the ledger to committed CSV
 ```
 
-Nightly (windowless — never wrap in a `.cmd`, it flashes a console):
+Nightly. `schtasks /create` cannot set a working directory, and without one the
+task starts in `System32`; paths resolve absolutely via `alphaos/paths.py`
+regardless, but set it anyway. Never wrap this in a `.cmd` — it flashes a
+console window.
 
+```powershell
+$a = New-ScheduledTaskAction -Execute "C:\AlphaOS\.venv\Scripts\pythonw.exe" `
+     -Argument "C:\AlphaOS\scripts\nightly.py" -WorkingDirectory "C:\AlphaOS"
+$t = New-ScheduledTaskTrigger -Daily -At 4:30am
+Register-ScheduledTask -TaskName AlphaOS-nightly -Action $a -Trigger $t -Force
 ```
-schtasks /create /tn AlphaOS-nightly /sc daily /st 04:30 ^
-  /tr "C:\AlphaOS\.venv\Scripts\pythonw.exe C:\AlphaOS\scripts\nightly.py"
-```
+
+`data/` is gitignored and every parquet in it is re-derivable from the network.
+The experiment ledger is not, so `registry_export/` mirrors it to committed CSV
+on every nightly run — losing it would silently reset the embargo touch counts.

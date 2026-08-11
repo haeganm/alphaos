@@ -13,6 +13,8 @@ import zipfile
 
 import polars as pl
 
+from .. import paths
+
 BASE = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp"
 FF3_URL = f"{BASE}/F-F_Research_Data_Factors_daily_CSV.zip"
 MOM_URL = f"{BASE}/F-F_Momentum_Factor_daily_CSV.zip"
@@ -44,7 +46,7 @@ def _parse(lines: list[str], names: list[str]) -> pl.DataFrame:
         pl.col("date_str").str.strptime(pl.Date, "%Y%m%d").alias("date")).drop("date_str")
 
 
-def build(out_path: str = "data/factors.parquet") -> pl.DataFrame:
+def build(out_path=paths.FACTORS) -> pl.DataFrame:
     ff3 = _parse(_read_zip_csv(FF3_URL), ["mkt_rf", "smb", "hml", "rf"])
     mom = _parse(_read_zip_csv(MOM_URL), ["mom"])
     df = ff3.join(mom, on="date", how="left").sort("date")
@@ -54,5 +56,5 @@ def build(out_path: str = "data/factors.parquet") -> pl.DataFrame:
     return df
 
 
-def load(path: str = "data/factors.parquet") -> pl.DataFrame:
+def load(path=paths.FACTORS) -> pl.DataFrame:
     return pl.read_parquet(path)

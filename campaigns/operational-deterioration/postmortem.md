@@ -1,5 +1,31 @@
 # Campaign post-mortem: operational deterioration in filings
 
+> **Re-run 2026-08-11 after the harness hardening pass. Conclusions unchanged.**
+>
+> All five verdicts remain FAILED and the mechanism-level lessons below still
+> hold. Two things did change and are worth recording:
+>
+> **Every trial now faces the same hurdle.** Previously the deflated Sharpe was
+> computed as each hypothesis finished, so the first one in the file was scored
+> against a variance estimated from a single row -- undefined, which collapsed
+> the deflation to zero and gave it *no multiple-testing penalty at all* --
+> while later ones faced hurdles of 0.032, 0.063, 0.084 and 0.108 depending
+> purely on their position. Campaigns now run every trial before judging any,
+> so all five are scored against one completed family variance (hurdle 0.094).
+>
+> **The concentration check was arithmetically broken.** It divided by the
+> absolute sum of period returns instead of the sum of absolute returns, so
+> partially cancelling series produced "single best period is 197% of total".
+> That is not a share, and it is a fatal check: it was killing trials 1 and 4
+> on arithmetic rather than evidence. Both now pass concentration and fail on
+> their actual weakness -- magnitude.
+>
+> Trial 5 (accruals) remains the only one with a pulse: correct sign, survives
+> costs, placebo, subperiod and the high-coverage retest, failing on
+> significance (t = 1.61) and DSR (0.778). That is unchanged from before.
+
+
+
 - **Campaign:** `operational-deterioration-2026-08`
 - **Family:** `operational_deterioration` (5 distinct trials)
 - **Data version:** 2026-08-11 build, discovery window 2010-01 to 2022-06

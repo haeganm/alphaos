@@ -19,9 +19,11 @@ holdout that cannot be peeked at. See conviction.py and scripts/nightly.py.
 """
 from __future__ import annotations
 
+import json
+
 import numpy as np
 
-from . import harness, registry as R, spec as spec_mod
+from . import harness, registry as R, spec as spec_mod, stats
 
 MAX_FAMILY_TOUCHES = 3
 
@@ -51,19 +53,22 @@ def query(exp_id: str, *, reg: R.Registry) -> dict:
             f"family {family!r} has spent all {MAX_FAMILY_TOUCHES} embargo queries; "
             f"the slice is no longer independent of this family's search")
 
-    import json
     spec = spec_mod.validate(json.loads(row["spec_json"]))
+
+    # Spend the query BEFORE running it. If the harness throws midway, the look
+    # still happened as far as the family's independence is concerned, and a
+    # crash must not hand back a free query.
+    touches = reg.record_holdout_touch(exp_id)
+
     if spec["type"] == "cross_sectional":
         wide = harness.load_wide(embargo=True, lag_days=spec["lag_days"])
         res = harness.run_cross_sectional(spec, wide)
         effect = res.get("mean_net", float("nan"))
-        series = res.get("returns_signed", [])
     else:
         res = harness.run_event_study(spec, embargo=True)
         effect = res.get("mean_bhar", float("nan"))
-        series = res.get("returns_signed", [])
+    series = res.get("returns_signed", [])
 
-    from . import stats
     lo, hi = stats.block_bootstrap_mean_ci(np.asarray(series, dtype=float))
     passed = bool(
         np.isfinite(effect)
@@ -71,8 +76,6 @@ def query(exp_id: str, *, reg: R.Registry) -> dict:
         and np.isfinite(lo) and np.isfinite(hi)
         and lo > 0                      # signed series: positive means it worked
     )
-
-    touches = reg.record_holdout_touch(exp_id)
     reg.record_verdict(
         exp_id, R.VAULT if passed else R.FAILED,
         "passed embargo" if passed else "failed embargo (no statistics disclosed)")

@@ -14,14 +14,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import uuid
 from datetime import datetime, timezone
 
 import duckdb
 
-DEFAULT_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                          "data", "alphaos.duckdb")
+from . import paths
+
+DEFAULT_DB = str(paths.REGISTRY_DB)
 
 # status lifecycle
 REGISTERED = "REGISTERED"
@@ -159,8 +161,14 @@ class Registry:
             [RUN, utcnow(), canonical_json(results), sharpe, dsr, exp_id])
         self._event(exp_id, "result", {"sharpe": sharpe, "dsr": dsr})
 
-    def record_verdict(self, exp_id: str, verdict: str, reason: str):
-        """Verdicts may change over time (VAULT -> DEMOTED); every change is logged."""
+    def record_verdict(self, exp_id: str, verdict: str, reason: str,
+                       dsr: float | None = None):
+        """Verdicts may change over time (VAULT -> DEMOTED); every change is logged.
+
+        dsr is set here rather than at record_result because it is only known
+        once the whole family has run -- deflation depends on how many trials
+        the winner was selected from.
+        """
         if verdict not in VERDICTS:
             raise ValueError(f"unknown verdict {verdict!r}")
         if self.get(exp_id) is None:
@@ -168,13 +176,23 @@ class Registry:
         self.con.execute(
             "update experiments set verdict=?, verdict_reason=?, decided_at=? where id=?",
             [verdict, reason, utcnow(), exp_id])
-        self._event(exp_id, "verdict", {"verdict": verdict, "reason": reason})
+        if dsr is not None and math.isfinite(dsr):
+            self.con.execute("update experiments set dsr=? where id=?", [dsr, exp_id])
+        self._event(exp_id, "verdict", {"verdict": verdict, "reason": reason,
+                                        "dsr": dsr})
 
-    def abandon(self, exp_id: str, reason: str):
-        """An abandoned trial still counts toward N. That is why it is recorded."""
-        self.con.execute("update experiments set status=? where id=? and results_json is null",
-                         [ABANDONED, exp_id])
+    def abandon(self, exp_id: str, reason: str) -> bool:
+        """An abandoned trial still counts toward N. That is why it is recorded.
+
+        Only logs when a row actually changed -- otherwise the audit trail
+        recorded abandonments that never happened.
+        """
+        row = self.get(exp_id)
+        if row is None or row["results_json"] is not None:
+            return False
+        self.con.execute("update experiments set status=? where id=?", [ABANDONED, exp_id])
         self._event(exp_id, "abandon", {"reason": reason})
+        return True
 
     def record_holdout_touch(self, exp_id: str) -> int:
         self.con.execute(
@@ -215,10 +233,20 @@ class Registry:
             [family_id]).fetchone()[0])
 
     def family_sharpe_variance(self, family_id: str) -> float:
-        """Var of trial Sharpes in the family -- the spread DSR deflates against."""
+        """Var of trial Sharpes in the family -- the spread DSR deflates against.
+
+        Excludes skeptic reruns, matching family_trial_count exactly. The two
+        halves of the DSR previously disagreed about what a trial is: reruns
+        were kept out of N but left in the variance, and since the skeptic
+        writes a Sharpe for every cost/placebo/subperiod rerun, deliberately
+        constructed noise dominated the pool. Measured on the live ledger that
+        inflated the variance by 52% (0.0117 vs 0.0077), raising the hurdle for
+        every genuine trial in the family.
+        """
         row = self.con.execute(
             "select var_samp(sharpe) from experiments "
-            "where family_id=? and sharpe is not null and isfinite(sharpe)",
+            "where family_id=? and trial_kind <> 'skeptic' "
+            "and sharpe is not null and isfinite(sharpe)",
             [family_id]).fetchone()
         return float(row[0]) if row and row[0] is not None else float("nan")
 

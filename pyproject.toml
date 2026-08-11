@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alphaos"
+version = "0.1.0"
+description = "Personal point-in-time alpha research laboratory"
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb",
+    "polars",
+    "numpy",
+    "scipy",
+    "pandas",
+    "statsmodels",
+    "requests",
+    "yfinance",
+    "beautifulsoup4",
+    "pyarrow",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["alphaos", "alphaos.ingest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Exact versions live in requirements.txt. They matter more than usual here:
+# pandas 3.x changed copy-on-write and string dtype semantics, and a duckdb
+# minor bump can require a registry file-format migration -- and the registry
+# is the one artifact that cannot be rebuilt from the network.
+markers = ["slow: full-data integration checks, excluded from the default run"]
+addopts = "-m 'not slow'"

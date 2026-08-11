@@ -59,24 +59,45 @@ def main(path: str) -> int:
         registered.append((exp_id, h))
         print(f"  registered {exp_id}: {h['hypothesis'][:70]}")
 
-    wide = None
-    if any(h["spec"]["type"] == "cross_sectional" for _, h in registered):
-        print("\nloading panel...")
-        wide = harness.load_wide()
+    # One frame per distinct lag_days. A frame built at one lag cannot be used
+    # for a spec registered at another -- the entry dates differ.
+    wides: dict[int, object] = {}
+    for _, h in registered:
+        spec = spec_mod.validate(h["spec"])
+        if spec["type"] == "cross_sectional" and spec["lag_days"] not in wides:
+            print(f"\nloading panel (lag_days={spec['lag_days']})...")
+            wides[spec["lag_days"]] = harness.load_wide(lag_days=spec["lag_days"])
 
-    results = []
+    # Pass 1: run and record every primary trial before judging any of them.
+    # The DSR deflates against the variance of the family's trial Sharpes, so
+    # critiquing as we go meant the first hypothesis was scored against a
+    # variance estimated from one row (undefined -> zero deflation, no
+    # multiple-testing penalty at all) and each later one against a different
+    # partial estimate. The hurdle depended on position in the file.
+    ran = []
     for exp_id, h in registered:
         spec = spec_mod.validate(h["spec"])
+        wide = wides.get(spec.get("lag_days", 0))
         print(f"\n{'=' * 72}\n{exp_id}: {h['hypothesis']}")
         print(f"  {spec_mod.describe(spec)}")
         res = harness.run(spec, wide=wide)
         if res.get("error"):
             print(f"  harness error: {res['error']}")
         reg.record_result(exp_id, res, sharpe=res.get("sharpe"))
+        ran.append((exp_id, h, spec, res, wide))
+
+    print(f"\n{'=' * 72}\nall {len(ran)} trials run; family variance now complete "
+          f"(N={reg.family_trial_count(family_id)}, "
+          f"var={reg.family_sharpe_variance(family_id):.6f}). Judging.\n")
+
+    # Pass 2: judge, now that every trial in the family has contributed.
+    results = []
+    for exp_id, h, spec, res, wide in ran:
+        print(f"{'=' * 72}\n{exp_id}: {h['hypothesis'][:70]}")
         crit = skeptic.critique(spec, res, reg=reg, family_id=family_id,
                                 exp_id=exp_id, wide=wide, data_version=data_version,
                                 campaign_id=campaign_id)
-        reg.record_verdict(exp_id, crit["verdict"], crit["reason"])
+        reg.record_verdict(exp_id, crit["verdict"], crit["reason"], dsr=crit["dsr"])
         print(skeptic.summarize(crit))
         results.append({"exp_id": exp_id, "hypothesis": h["hypothesis"],
                         "spec": spec, "results": res, "critique": crit})

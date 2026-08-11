@@ -24,7 +24,7 @@ MAX_TOP10_SHARE = 0.25          # event studies: no result carried by ten events
 MAX_BEST_PERIOD_SHARE = 0.50    # cross-sectional: nor by one lucky month
 MIN_COVERAGE = 0.60
 PLACEBO_MAX_ABS_T = 2.5
-MIN_HIGH_COVERAGE_RATIO = 0.0   # sign must hold post-2016; magnitude may shrink
+MIN_NEUTRALIZER_COVERAGE = 0.5  # a requested neutraliser must have real data
 
 
 def _primary(results: dict) -> tuple[float, float]:
@@ -36,6 +36,23 @@ def _primary(results: dict) -> tuple[float, float]:
 
 def _check(name: str, passed: bool, detail: str, fatal: bool = True) -> dict:
     return {"check": name, "passed": bool(passed), "fatal": fatal, "detail": detail}
+
+
+def concentration_share(returns) -> float:
+    """Fraction of total absolute movement contributed by the single largest
+    period. Always in [0, 1].
+
+    The denominator is the sum of absolute returns, not the absolute sum.
+    Partially cancelling periods make the latter tiny, which printed shares
+    like "197% of total" -- and this is a fatal check, so it was killing
+    hypotheses on arithmetic rather than on evidence.
+    """
+    r = np.asarray(returns, dtype=float)
+    r = r[np.isfinite(r)]
+    denom = float(np.abs(r).sum())
+    if r.size == 0 or denom <= 1e-12:
+        return 1.0
+    return float(np.abs(r).max()) / denom
 
 
 def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
@@ -64,11 +81,14 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
         "significance", np.isfinite(tstat) and abs(tstat) >= MIN_ABS_T,
         f"|t| = {abs(tstat):.2f} vs floor {MIN_ABS_T}"))
 
-    # 3. bootstrap interval excludes zero
+    # 3. bootstrap interval on the tradable (sign-adjusted) series excludes zero
+    # from below. A CI sitting entirely below zero means the effect ran the
+    # wrong way, which the sign check has already caught.
     ci = results.get("mean_bhar_ci") or results.get("mean_net_ci") or [float("nan")] * 2
-    ci_ok = all(np.isfinite(ci)) and (ci[0] > 0 or ci[1] < 0)
+    ci_ok = all(np.isfinite(ci)) and ci[0] > 0
     checks.append(_check("bootstrap_ci", ci_ok,
-                         f"blocked 95% CI [{ci[0]:.5f}, {ci[1]:.5f}]"))
+                         f"blocked 95% CI on the tradable series "
+                         f"[{ci[0]:.5f}, {ci[1]:.5f}]"))
 
     # 4. concentration
     if is_event:
@@ -78,11 +98,7 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
         checks.append(_check("breadth", results.get("n_distinct_names", 0) >= 50,
                              f"{results.get('n_distinct_names')} distinct names"))
     else:
-        rets = np.asarray(results.get("returns", []), dtype=float)
-        if rets.size and abs(rets.sum()) > 1e-12:
-            share = abs(rets[np.argmax(np.abs(rets))]) / abs(rets.sum())
-        else:
-            share = 1.0
+        share = concentration_share(results.get("returns", []))
         checks.append(_check("concentration", share <= MAX_BEST_PERIOD_SHARE,
                              f"single best period is {share:.1%} of total"))
         # Informational, not fatal. Low coverage on a fundamentals signal is
@@ -106,9 +122,20 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
     else:
         checks.append(_check("subperiod_sign", False, "too few observations to split"))
 
+    # 5b. a requested neutraliser that had no data is a mislabelled result
+    cov = results.get("neutralize_coverage") or {}
+    if cov:
+        worst = min(cov, key=cov.get)
+        checks.append(_check(
+            "neutralizer_data", cov[worst] >= MIN_NEUTRALIZER_COVERAGE,
+            f"{worst} neutralisation had real data for {cov[worst]:.0%} of names "
+            f"(rest mean-imputed); spec claims neutralisation on {sorted(cov)}"))
+
     # 6. costs at 2x, and 7. placebo -- these rerun the harness
     child_specs: list[tuple[str, dict, dict]] = []
     if not is_event:
+        if wide is None:
+            raise ValueError("critique of a cross_sectional spec requires `wide`")
         double = dict(s)
         double["cost_bps"] = s["cost_bps"] * 2
         r2 = harness.run_cross_sectional(double, wide)

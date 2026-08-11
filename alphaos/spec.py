@@ -168,9 +168,11 @@ def validate(spec: dict) -> dict:
     win = spec.get("window", [1, 60])
     _require(isinstance(win, list) and len(win) == 2 and all(isinstance(v, int) for v in win),
              "window must be [start_day, end_day] in trading days from entry")
-    _require(0 <= win[0] < win[1] <= 252,
-             "window must satisfy 0 <= start < end <= 252; a window starting at 0 "
-             "would include the event bar itself")
+    _require(1 <= win[0] < win[1] <= 252,
+             "window must satisfy 1 <= start < end <= 252; a window starting at 0 "
+             "would include the return into the entry close (the untradable "
+             "announcement reaction) and would collapse the BHAR benchmark leg "
+             "to zero, silently reporting a raw buy-and-hold return")
     bm = spec.get("benchmark", "spy")
     _require(bm in BENCHMARKS, f"benchmark must be one of {sorted(BENCHMARKS)}")
     me = spec.get("min_events", 100)

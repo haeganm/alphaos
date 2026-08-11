@@ -20,7 +20,7 @@ import polars as pl
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1]))
 
-from alphaos import harness  # noqa: E402
+from alphaos import harness, paths  # noqa: E402
 from alphaos.ingest import events as ev_mod  # noqa: E402
 
 
@@ -30,7 +30,10 @@ def main(limit: int = 4000) -> int:
         print("AsOf database not found; nothing to cross-validate")
         return 0
 
-    px = pl.read_parquet("data/prices.parquet").sort(["ticker", "date"])
+    if not paths.PRICES.exists():
+        print(f"no price data at {paths.PRICES}; run scripts/build_data.py first")
+        return 1
+    px = pl.read_parquet(paths.PRICES).sort(["ticker", "date"])
     series = {}
     for key, d in px.partition_by("ticker", as_dict=True).items():
         t = key[0] if isinstance(key, tuple) else key

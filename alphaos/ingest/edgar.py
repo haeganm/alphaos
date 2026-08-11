@@ -26,8 +26,10 @@ from datetime import date
 
 import polars as pl
 
+from .. import paths
+
 BULK_URL = "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip"
-BULK_ZIP = "data/cache/companyfacts.zip"
+BULK_ZIP = paths.COMPANYFACTS_ZIP
 
 # Canonical name -> XBRL tags in preference order. Companies switch tags over
 # time (ASC 606 moved most filers off SalesRevenueNet in 2018), so a canonical
@@ -120,8 +122,8 @@ def _facts_from_json(cik: str, doc: dict) -> list[tuple]:
     return rows
 
 
-def build(ciks: list[str], out_path: str = "data/fundamentals.parquet",
-          zip_path: str = BULK_ZIP) -> pl.DataFrame:
+def build(ciks: list[str], out_path=paths.FUNDAMENTALS,
+          zip_path=BULK_ZIP) -> pl.DataFrame:
     """Extract whitelisted facts for the given CIKs from the bulk archive."""
     download_bulk(zip_path)
     wanted = {c.zfill(10) for c in ciks if c}
@@ -158,21 +160,6 @@ def build(ciks: list[str], out_path: str = "data/fundamentals.parquet",
     return df
 
 
-def quarterly(df: pl.DataFrame, tag: str, *, tol: int = 25) -> pl.DataFrame:
-    """Duration facts covering roughly one quarter (~90 +/- tol days).
-
-    Filtering by period length is what keeps a 10-K annual revenue figure from
-    being compared against a 10-Q quarterly one.
-    """
-    return df.filter((pl.col("tag") == tag) &
-                     pl.col("period_days").is_between(90 - tol, 90 + tol))
-
-
-def instant(df: pl.DataFrame, tag: str) -> pl.DataFrame:
-    """Balance-sheet facts: a level at a point in time, no duration."""
-    return df.filter((pl.col("tag") == tag) & pl.col("period_days").is_null())
-
-
-def annual(df: pl.DataFrame, tag: str, *, tol: int = 30) -> pl.DataFrame:
-    return df.filter((pl.col("tag") == tag) &
-                     pl.col("period_days").is_between(365 - tol, 365 + tol))
+# Period-length filtering lives in panel.quarterly_series, which is the only
+# consumer. Duplicating it here (with different tolerances) invited the two
+# copies to drift apart.

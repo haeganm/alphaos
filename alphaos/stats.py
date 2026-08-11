@@ -141,6 +141,18 @@ def newey_west_tstat(x, lags: int | None = None) -> float:
     return float(a.mean() / se)
 
 
+def default_block(n: int) -> int:
+    """The one block-length rule, used everywhere.
+
+    Four different conventions had grown across the harness, the holdout and
+    this module, so discovery and embargo computed the decisive interval on the
+    same series with different blocks. n**(1/3) is the standard choice for the
+    moving-block bootstrap; the floor of 5 keeps short series from degenerating
+    to an iid bootstrap, which is the error this whole approach exists to avoid.
+    """
+    return max(5, int(round(n ** (1.0 / 3.0))))
+
+
 def block_bootstrap_mean_ci(x, block: int | None = None, n_boot: int = BOOT_N,
                             seed: int = BOOT_SEED, alpha: float = 0.05):
     """Moving-block bootstrap CI for the mean of an autocorrelated series.
@@ -154,7 +166,7 @@ def block_bootstrap_mean_ci(x, block: int | None = None, n_boot: int = BOOT_N,
     a = a[np.isfinite(a)]
     n = a.size
     if block is None:
-        block = max(5, int(round(n ** (1.0 / 3.0))))
+        block = default_block(n)
     block = max(1, min(int(block), n))
     if n <= block or n < 10:
         return float("nan"), float("nan")
@@ -167,23 +179,6 @@ def block_bootstrap_mean_ci(x, block: int | None = None, n_boot: int = BOOT_N,
     lo = float(np.percentile(means, 100 * alpha / 2))
     hi = float(np.percentile(means, 100 * (1 - alpha / 2)))
     return lo, hi
-
-
-def block_bootstrap_paired_ci(x_a, x_b, block: int | None = None,
-                              n_boot: int = BOOT_N, seed: int = BOOT_SEED,
-                              alpha: float = 0.05):
-    """Blocked CI of mean(x_a - x_b), paired row-wise.
-
-    Pairing between highly correlated variants resolves differences a level CI
-    cannot -- used to ask "is variant B actually better than A, or is this the
-    same series wearing a hat?"
-    """
-    a = np.asarray(x_a, dtype=float)
-    b = np.asarray(x_b, dtype=float)
-    if a.shape != b.shape:
-        raise ValueError("paired CI requires equal-length series")
-    d = a - b
-    return block_bootstrap_mean_ci(d[np.isfinite(d)], block, n_boot, seed, alpha)
 
 
 # --------------------------------------------------------------------------

@@ -20,6 +20,13 @@ this repo mean anything. Follow them exactly.
    which returns PASS or FAIL and no statistics. A holdout you have seen is
    training data with a ceremonial name.
 
+   One sanctioned exception, and it is not a loophole: `panel.load_all()` and
+   `load_wide(all_data=True)` see post-embargo data and exist for *grading
+   specs that are already frozen* -- forward grading in `scripts/nightly.py`
+   and the conviction sheet's current book. Evaluating a spec whose hash was
+   registered months ago cannot leak backwards into a choice already made.
+   Nothing that generates or selects hypotheses may call them.
+
 3. **Generate ideas from mechanisms, not from results.** Read
    `campaigns/*/postmortem.md` to learn *why* things died. Do not query the
    registry's results, Sharpes or return series to decide what to try next.
@@ -34,12 +41,17 @@ this repo mean anything. Follow them exactly.
    reversed version seems interesting, that is a *new* hypothesis with its own
    registration and its own place in the trial count.
 
-5. **Rerun the controls after any change** to `harness.py`, `panel.py`,
-   `spec.py`, or the data:
+5. **Rerun the tests and controls after any change** to `harness.py`,
+   `panel.py`, `spec.py`, `skeptic.py`, or the data:
    ```
+   python -m pytest tests/ -q
    python -c "from alphaos import controls; print(controls.report(controls.run_all()))"
    ```
    If they fail, nothing else in the repo is trustworthy until they pass.
+   A harness change also invalidates recorded verdicts: re-run the affected
+   campaigns and append a before/after table to their post-mortems rather than
+   silently letting old numbers stand (see the 2026-08-11 revisions for the
+   worked example).
 
 ## The campaign loop
 

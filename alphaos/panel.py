@@ -34,12 +34,13 @@ from datetime import date, timedelta
 
 import polars as pl
 
+from . import paths
+
 N_LAGS = 8
 EMBARGO_START = date(2022, 7, 1)   # discovery data ends here; see holdout.py
-PANEL_PATH = "data/panel.parquet"
-EMBARGO_PANEL_PATH = "data/embargo/panel.parquet"
-FORWARD_PATH = "data/forward_returns.parquet"
-VERSION_PATH = "data/data_version.json"
+PANEL_PATH = paths.PANEL
+EMBARGO_PANEL_PATH = paths.EMBARGO_PANEL
+VERSION_PATH = paths.DATA_VERSION
 
 DURATION_TAGS = {"Revenues", "CostOfRevenue", "NetIncomeLoss",
                  "OperatingIncomeLoss", "OperatingCashFlow"}
@@ -99,7 +100,12 @@ def quarterly_series(fund: pl.DataFrame) -> pl.DataFrame:
                 .with_columns(pl.lit(True).alias("derived")))
 
     out = pl.concat([instants, direct, derived])
-    # Prefer a directly reported quarter over a derived one for the same period.
+    # Prefer a directly reported quarter over a derived one *for the same filing
+    # date*. `filed` stays in the subset deliberately: two values for one period
+    # filed on different dates are two different states of knowledge, not
+    # duplicates, and collapsing them would destroy restatement history and with
+    # it the point-in-time guarantee (see tests/test_panel_pit.py). A later
+    # filing legitimately supersedes an earlier one at snapshot time.
     return (out.sort(["cik", "tag", "period_end", "derived", "filed"])
                .unique(subset=["cik", "tag", "period_end", "filed"], keep="first")
                .sort(["cik", "tag", "period_end", "filed"]))
@@ -268,25 +274,34 @@ def _membership_rows(universe: pl.DataFrame, dates: list[date]) -> pl.DataFrame:
                                       "cik": pl.Utf8, "gics_sector": pl.Utf8})
 
 
-def data_version(paths: list[str]) -> str:
-    """Content hash of the built artifacts. Registered with every experiment;
-    a bump invalidates prior verdicts because the evidence changed."""
+def data_version(artifacts: list) -> str:
+    """Content hash of the built artifacts. Registered with every experiment; a
+    bump invalidates prior verdicts because the evidence changed.
+
+    Hashes each file in full and carries no date prefix. Hashing only the first
+    megabyte missed real changes past that offset at unchanged file size, and
+    stamping today's date made the version churn every single night even when
+    nothing had changed -- which made "the data changed" unfalsifiable in both
+    directions.
+    """
     h = hashlib.sha256()
-    for p in sorted(paths):
-        if os.path.exists(p):
-            st = os.stat(p)
-            h.update(f"{os.path.basename(p)}:{st.st_size}".encode())
-            with open(p, "rb") as fh:
-                h.update(fh.read(1 << 20))
-    return f"{date.today().isoformat()}-{h.hexdigest()[:10]}"
+    for p in sorted(str(a) for a in artifacts):
+        if not os.path.exists(p):
+            continue
+        h.update(f"{os.path.basename(p)}:{os.path.getsize(p)}".encode())
+        with open(p, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 22), b""):
+                h.update(chunk)
+    return h.hexdigest()[:16]
 
 
-def build(fundamentals_path="data/fundamentals.parquet",
-          universe_path="data/universe.parquet",
-          prices_path="data/prices.parquet",
+def build(fundamentals_path=paths.FUNDAMENTALS,
+          universe_path=paths.UNIVERSE,
+          prices_path=paths.PRICES,
           start=date(2010, 1, 1), end: date | None = None,
           freq: str = "monthly") -> dict:
     end = end or date.today()
+    paths.ensure_dirs()
     fund = pl.read_parquet(fundamentals_path)
     uni = pl.read_parquet(universe_path)
     px = pl.read_parquet(prices_path)
@@ -303,19 +318,14 @@ def build(fundamentals_path="data/fundamentals.parquet",
     members = _membership_rows(uni, dates)
     panel = members.join(snaps, on=["asof", "cik"], how="inner")
 
-    # Returns are deliberately NOT joined in here. harness.py builds them from
-    # prices at run time, because the entry date depends on the spec's lag_days
-    # and two copies of "the forward return" is exactly the kind of drift that
-    # ends with a backtest disagreeing with itself.
-    print("computing market table (lag 0, for inspection)...")
-    fwd = market_table(px, dates)
-
+    # Returns are deliberately NOT computed or stored here. harness.py builds
+    # them from prices at run time, because the entry date depends on the spec's
+    # lag_days, and two copies of "the forward return" is exactly the kind of
+    # drift that ends with a backtest disagreeing with itself.
     disc = panel.filter(pl.col("asof") < EMBARGO_START)
     emb = panel.filter(pl.col("asof") >= EMBARGO_START)
-    os.makedirs("data/embargo", exist_ok=True)
     disc.write_parquet(PANEL_PATH)
     emb.write_parquet(EMBARGO_PANEL_PATH)
-    fwd.write_parquet(FORWARD_PATH)
 
     dv = data_version([fundamentals_path, universe_path, prices_path, PANEL_PATH])
     meta = {
@@ -340,6 +350,29 @@ def load(embargo: bool = False) -> pl.DataFrame:
     return pl.read_parquet(EMBARGO_PANEL_PATH if embargo else PANEL_PATH)
 
 
-def current_version() -> str:
-    with open(VERSION_PATH, "r", encoding="utf-8") as fh:
-        return json.load(fh)["data_version"]
+def load_all() -> pl.DataFrame:
+    """Discovery + embargo together. Reserved for grading already-frozen specs.
+
+    Forward grading needs rebalances that postdate a spec's registration, and
+    those live in the embargo file. Reading the discovery panel instead made
+    forward grading structurally empty -- it reported "too early to judge"
+    forever and auto-demotion became unreachable code.
+
+    This is not a hole in the embargo. The embargo exists to stop the *search*
+    seeing unseen data; evaluating a spec whose hash was frozen months earlier
+    cannot leak backwards into a choice that was already made. Nothing that
+    generates hypotheses may call this.
+    """
+    return pl.concat([load(False), load(True)]).sort(["asof", "ticker"])
+
+
+def current_version(default: str | None = None) -> str:
+    """data_version of the current build. `default` avoids a FileNotFoundError
+    escaping an exception handler on a fresh checkout."""
+    try:
+        with open(VERSION_PATH, "r", encoding="utf-8") as fh:
+            return json.load(fh)["data_version"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        if default is not None:
+            return default
+        raise

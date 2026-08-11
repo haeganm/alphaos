@@ -22,8 +22,13 @@ import warnings
 
 import polars as pl
 
-CACHE_DIR = "data/cache/prices"
-TTL_HOURS = 20
+from .. import paths
+
+CACHE_DIR = paths.PRICE_CACHE
+# Longer than the 24h nightly interval on purpose: an 18h TTL against a daily
+# schedule can never produce a cache hit, so every run re-downloaded full
+# history for ~500 tickers.
+TTL_HOURS = 30
 BENCHMARKS = ["SPY", "QQQ", "DIA"]
 SECTOR_ETFS = ["XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU", "XLB", "XLRE", "XLC"]
 
@@ -37,7 +42,7 @@ SECTOR_ETF_MAP = {
 
 
 def _path(ticker: str) -> str:
-    return os.path.join(CACHE_DIR, f"{ticker.replace('/', '_')}.parquet")
+    return os.path.join(str(CACHE_DIR), f"{ticker.replace('/', '_')}.parquet")
 
 
 def is_fresh(ticker: str, ttl_hours: float = TTL_HOURS) -> bool:
@@ -117,12 +122,12 @@ def fetch_all(tickers: list[str], *, batch_size: int = 40,
 
 def load_panel(tickers: list[str] | None = None) -> pl.DataFrame:
     """All cached bars as one long frame: date, ticker, close, volume."""
-    if not os.path.isdir(CACHE_DIR):
+    if not os.path.isdir(str(CACHE_DIR)):
         return pl.DataFrame(schema={"date": pl.Date, "ticker": pl.Utf8,
                                     "close": pl.Float64, "volume": pl.Float64})
     wanted = set(tickers) if tickers is not None else None
     frames = []
-    for fn in os.listdir(CACHE_DIR):
+    for fn in os.listdir(str(CACHE_DIR)):
         if not fn.endswith(".parquet"):
             continue
         t = fn[:-8]
@@ -137,7 +142,7 @@ def load_panel(tickers: list[str] | None = None) -> pl.DataFrame:
     return pl.concat(frames).sort(["ticker", "date"])
 
 
-def build(tickers: list[str], out_path: str = "data/prices.parquet") -> pl.DataFrame:
+def build(tickers: list[str], out_path=paths.PRICES) -> pl.DataFrame:
     ok, missing = fetch_all(list(tickers) + BENCHMARKS + SECTOR_ETFS)
     df = load_panel()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

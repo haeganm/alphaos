@@ -15,7 +15,7 @@ import polars as pl
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from alphaos import panel  # noqa: E402
+from alphaos import panel, paths  # noqa: E402
 from alphaos.ingest import edgar, events, factors, prices, universe  # noqa: E402
 
 
@@ -29,14 +29,14 @@ def main(argv: list[str]) -> int:
     print("\n== 2/6 prices ==")
     if not skip_prices:
         prices.build(uni["ticker"].unique().to_list())
-    px = pl.read_parquet("data/prices.parquet")
+    px = pl.read_parquet(paths.PRICES)
 
     print("\n== 3/6 resolving renamed tickers ==")
     spans = {}
     for key, g in px.group_by("ticker"):
         spans[key[0] if isinstance(key, tuple) else key] = (g["date"].min(), g["date"].max())
     uni, accepted = universe.resolve_price_tickers(uni, spans)
-    uni.write_parquet("data/universe.parquet")
+    uni.write_parquet(paths.UNIVERSE)
     print(f"  {len(accepted)} renames resolved via CIK continuity")
 
     print("\n== 4/6 fundamentals (SEC XBRL, point-in-time) ==")

@@ -26,11 +26,12 @@ import polars as pl
 from bs4 import BeautifulSoup
 
 from . import http
+from .. import paths
 
 API = "https://en.wikipedia.org/w/api.php"
 PAGE = "List of S&P 500 companies"
 SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
-SNAPSHOT_CACHE = "data/cache/wiki_snapshots.json"
+SNAPSHOT_CACHE = paths.WIKI_SNAPSHOTS
 START_YEAR = 2010
 # ponytail: quarterly snapshots. Monthly costs 3x the calls for ~6 weeks better
 # resolution on departures; raise to monthly if a signal turns out to be
@@ -122,7 +123,7 @@ def _parse_constituents(html: str) -> list[dict]:
     return out
 
 
-def fetch_snapshots(cache_path: str = SNAPSHOT_CACHE, refresh: bool = False) -> list[dict]:
+def fetch_snapshots(cache_path=SNAPSHOT_CACHE, refresh: bool = False) -> list[dict]:
     """One parsed constituents snapshot per quarter since START_YEAR."""
     cache = {}
     if os.path.exists(cache_path) and not refresh:
@@ -269,7 +270,7 @@ def coverage_report(df: pl.DataFrame) -> dict:
     }
 
 
-def build(out_path: str = "data/universe.parquet", refresh: bool = False) -> pl.DataFrame:
+def build(out_path=paths.UNIVERSE, refresh: bool = False) -> pl.DataFrame:
     snaps = fetch_snapshots(refresh=refresh)
     df = attach_ciks(build_membership(snaps))
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
