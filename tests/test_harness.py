@@ -180,6 +180,13 @@ def test_shuffled_signal_destroys_the_edge():
     assert abs(placebo["t_gross"]) < abs(real["t_net"]) / 2
 
 
+def test_seeded_placebo_is_independent_of_input_row_order():
+    panel = _panel()
+    a = harness.run_cross_sectional(SPEC, panel, shuffle_seed=7)
+    b = harness.run_cross_sectional(SPEC, panel.reverse(), shuffle_seed=7)
+    assert a["returns"] == b["returns"]
+
+
 def test_neutralize_reports_missing_data_instead_of_silently_skipping():
     """An all-null mktcap collapses the design column to a constant; lstsq
     accepts it and the result would still claim to be size-neutralised."""

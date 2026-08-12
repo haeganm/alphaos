@@ -204,6 +204,10 @@ def run_replication_controls(wide: pl.DataFrame) -> list[dict]:
 def run_all(wide: pl.DataFrame | None = None, data_version: str = "controls") -> dict:
     if wide is None:
         wide = harness.load_wide()
+    # Polars does not promise the row order of joins/unique. Stable ordering
+    # makes seeded planted/garbage columns refer to the same companies on every
+    # process invocation.
+    wide = wide.sort(["asof", "ticker"])
     results: list[dict] = []
     with tempfile.TemporaryDirectory() as td:
         reg = R.Registry(f"{td}/controls.duckdb")

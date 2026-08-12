@@ -45,6 +45,36 @@ def test_restatement_does_not_travel_backwards():
     assert panel.snapshot(qs, date(2016, 8, 1))["q0"][0] == 900.0   # after restatement
 
 
+def test_duration_restatements_keep_their_earlier_vintages():
+    """The instant path preserved restatement history; the duration path did not.
+
+    Q1 revenue 100 filed in May, H1 250 filed in August, then Q1 restated to 120
+    in September. Collapsing duration facts to the newest version before
+    differencing left the August snapshot with NO revenue at all -- the only
+    surviving Q1 row was stamped September and filtered out as not-yet-known.
+    An August observer knew Q1 = 100 and could derive Q2 = 150.
+    """
+    rows = [
+        ("0001", "Revenues", "Revenues", 0, "USD", date(2015, 1, 1), date(2015, 3, 31),
+         90, 100.0, date(2015, 5, 1), "10-Q", "a1", 2015, "Q1"),
+        ("0001", "Revenues", "Revenues", 0, "USD", date(2015, 1, 1), date(2015, 6, 30),
+         181, 250.0, date(2015, 8, 1), "10-Q", "a2", 2015, "Q2"),
+        ("0001", "Revenues", "Revenues", 0, "USD", date(2015, 1, 1), date(2015, 3, 31),
+         90, 120.0, date(2015, 9, 1), "10-Q/A", "a3", 2015, "Q1"),
+    ]
+    qs = panel.quarterly_series(_facts(rows))
+
+    aug = panel.snapshot(qs, date(2015, 8, 15))
+    assert not aug.is_empty(), "August observer must still see Q1 and derived Q2"
+    assert aug["q0"][0] == pytest.approx(150.0)      # Q2 = 250 - 100, as known then
+    assert aug["q1"][0] == pytest.approx(100.0)      # Q1 as originally filed
+
+    # After the restatement both figures move to their corrected values.
+    oct_ = panel.snapshot(qs, date(2015, 10, 1))
+    assert oct_["q0"][0] == pytest.approx(130.0)     # Q2 = 250 - 120
+    assert oct_["q1"][0] == pytest.approx(120.0)
+
+
 def test_ytd_chain_becomes_quarterly_and_inherits_the_later_filing_date():
     """Q2 = H1 - Q1. It is only knowable once the H1 filing exists, so the
     derived quarter must carry the H1 filing date, not Q1's."""

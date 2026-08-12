@@ -1,6 +1,6 @@
 [
   {
-    "exp_id": "exp_7abf98f7f193",
+    "exp_id": "exp_cb819fbd9346",
     "hypothesis": "Stocks with the most positive reaction to their earnings 8-K continue to outperform over the following three months",
     "spec": {
       "type": "event_study",
@@ -12894,7 +12894,7 @@
     },
     "critique": {
       "verdict": "FAILED",
-      "reason": "bootstrap_ci: blocked 95% CI on the tradable series [-0.00005, 0.00755]; subperiod_sign: first half +0.00817, second half -0.00080; deflated_sharpe: DSR 0.4052 (Sharpe 0.031 over 4 family trials, hurdle 0.034) vs floor 0.95",
+      "reason": "bootstrap_ci: blocked 95% CI on the tradable series [-0.00005, 0.00755]; subperiod_sign: first half +0.00817, second half -0.00080; deflated_sharpe: DSR 0.5247 (Sharpe 0.031 over 4 family trials, hurdle 0.030) vs floor 0.95",
       "checks": [
         {
           "check": "predicted_sign",
@@ -12936,32 +12936,32 @@
           "check": "placebo",
           "passed": true,
           "fatal": true,
-          "detail": "shuffled-condition |t| = 1.79"
+          "detail": "shuffled-condition |t| = 1.80"
         },
         {
           "check": "deflated_sharpe",
           "passed": false,
           "fatal": true,
-          "detail": "DSR 0.4052 (Sharpe 0.031 over 4 family trials, hurdle 0.034) vs floor 0.95"
+          "detail": "DSR 0.5247 (Sharpe 0.031 over 4 family trials, hurdle 0.030) vs floor 0.95"
         }
       ],
-      "dsr": 0.4052284934305388,
+      "dsr": 0.5246574603892343,
       "dsr_detail": {
         "sharpe": 0.03121236090429609,
         "n_obs": 6386,
         "skew": 1.1052580053352308,
         "kurtosis": 16.17877912862037,
         "n_trials": 4,
-        "sr_variance": 0.001054598626802495,
-        "expected_max_sharpe": 0.03416725136987236,
+        "sr_variance": 0.000837630914621175,
+        "expected_max_sharpe": 0.030450385197997525,
         "psr": 0.9943516006852513,
-        "dsr": 0.4052284934305388
+        "dsr": 0.5246574603892343
       },
       "n_family_trials": 4
     }
   },
   {
-    "exp_id": "exp_01fd156bb719",
+    "exp_id": "exp_52be31a57fb3",
     "hypothesis": "Stocks with the most negative reaction to their earnings 8-K continue to underperform over the following three months",
     "spec": {
       "type": "event_study",
@@ -25855,7 +25855,7 @@
     },
     "critique": {
       "verdict": "FAILED",
-      "reason": "predicted_sign: predicted -1, observed +1 (effect +0.00145); significance: |t| = 0.78 vs floor 2.0; bootstrap_ci: blocked 95% CI on the tradable series [-0.00546, 0.00262]; subperiod_sign: first half +0.00305, second half -0.00015; deflated_sharpe: DSR 0.0001 (Sharpe -0.012 over 4 family trials, hurdle 0.034) vs floor 0.95",
+      "reason": "predicted_sign: predicted -1, observed +1 (effect +0.00145); significance: |t| = 0.78 vs floor 2.0; bootstrap_ci: blocked 95% CI on the tradable series [-0.00546, 0.00262]; subperiod_sign: first half +0.00305, second half -0.00015; deflated_sharpe: DSR 0.0003 (Sharpe -0.012 over 4 family trials, hurdle 0.030) vs floor 0.95",
       "checks": [
         {
           "check": "predicted_sign",
@@ -25897,32 +25897,32 @@
           "check": "placebo",
           "passed": true,
           "fatal": true,
-          "detail": "shuffled-condition |t| = 1.56"
+          "detail": "shuffled-condition |t| = 1.48"
         },
         {
           "check": "deflated_sharpe",
           "passed": false,
           "fatal": true,
-          "detail": "DSR 0.0001 (Sharpe -0.012 over 4 family trials, hurdle 0.034) vs floor 0.95"
+          "detail": "DSR 0.0003 (Sharpe -0.012 over 4 family trials, hurdle 0.030) vs floor 0.95"
         }
       ],
-      "dsr": 0.00010961065324893715,
+      "dsr": 0.0003402805378843743,
       "dsr_detail": {
         "sharpe": -0.011855289283204323,
         "n_obs": 6386,
         "skew": -0.8634181962407947,
         "kurtosis": 11.416771565001117,
         "n_trials": 4,
-        "sr_variance": 0.001054598626802495,
-        "expected_max_sharpe": 0.03416725136987236,
+        "sr_variance": 0.000837630914621175,
+        "expected_max_sharpe": 0.030450385197997525,
         "psr": 0.1705431762288575,
-        "dsr": 0.00010961065324893715
+        "dsr": 0.0003402805378843743
       },
       "n_family_trials": 4
     }
   },
   {
-    "exp_id": "exp_1f0dd7892f42",
+    "exp_id": "exp_8364e6ba6c44",
     "hypothesis": "Drift after a strong earnings reaction is concentrated in the first month rather than spread over three",
     "spec": {
       "type": "event_study",
@@ -38778,7 +38778,7 @@
     },
     "critique": {
       "verdict": "FAILED",
-      "reason": "deflated_sharpe: DSR 0.7765 (Sharpe 0.044 over 4 family trials, hurdle 0.034) vs floor 0.95",
+      "reason": "deflated_sharpe: DSR 0.8557 (Sharpe 0.044 over 4 family trials, hurdle 0.030) vs floor 0.95",
       "checks": [
         {
           "check": "predicted_sign",
@@ -38820,32 +38820,32 @@
           "check": "placebo",
           "passed": true,
           "fatal": true,
-          "detail": "shuffled-condition |t| = 0.54"
+          "detail": "shuffled-condition |t| = 0.55"
         },
         {
           "check": "deflated_sharpe",
           "passed": false,
           "fatal": true,
-          "detail": "DSR 0.7765 (Sharpe 0.044 over 4 family trials, hurdle 0.034) vs floor 0.95"
+          "detail": "DSR 0.8557 (Sharpe 0.044 over 4 family trials, hurdle 0.030) vs floor 0.95"
         }
       ],
-      "dsr": 0.7764596714238212,
+      "dsr": 0.8557480528861325,
       "dsr_detail": {
         "sharpe": 0.043551932350685746,
         "n_obs": 6387,
         "skew": 0.7547708101208566,
         "kurtosis": 13.360826985262204,
         "n_trials": 4,
-        "sr_variance": 0.001054598626802495,
-        "expected_max_sharpe": 0.03416725136987236,
+        "sr_variance": 0.000837630914621175,
+        "expected_max_sharpe": 0.030450385197997525,
         "psr": 0.9997908955924124,
-        "dsr": 0.7764596714238212
+        "dsr": 0.8557480528861325
       },
       "n_family_trials": 4
     }
   },
   {
-    "exp_id": "exp_974ca6b471f4",
+    "exp_id": "exp_b6cbe052c68e",
     "hypothesis": "Drift after a strong earnings reaction persists when measured against the sector rather than the market",
     "spec": {
       "type": "event_study",
@@ -51283,7 +51283,7 @@
     },
     "critique": {
       "verdict": "FAILED",
-      "reason": "significance: |t| = 1.38 vs floor 2.0; bootstrap_ci: blocked 95% CI on the tradable series [-0.00078, 0.00516]; deflated_sharpe: DSR 0.1223 (Sharpe 0.019 over 4 family trials, hurdle 0.034) vs floor 0.95",
+      "reason": "significance: |t| = 1.38 vs floor 2.0; bootstrap_ci: blocked 95% CI on the tradable series [-0.00078, 0.00516]; deflated_sharpe: DSR 0.1923 (Sharpe 0.019 over 4 family trials, hurdle 0.030) vs floor 0.95",
       "checks": [
         {
           "check": "predicted_sign",
@@ -51325,26 +51325,26 @@
           "check": "placebo",
           "passed": true,
           "fatal": true,
-          "detail": "shuffled-condition |t| = 1.79"
+          "detail": "shuffled-condition |t| = 1.71"
         },
         {
           "check": "deflated_sharpe",
           "passed": false,
           "fatal": true,
-          "detail": "DSR 0.1223 (Sharpe 0.019 over 4 family trials, hurdle 0.034) vs floor 0.95"
+          "detail": "DSR 0.1923 (Sharpe 0.019 over 4 family trials, hurdle 0.030) vs floor 0.95"
         }
       ],
-      "dsr": 0.12234632998637401,
+      "dsr": 0.19227947543165486,
       "dsr_detail": {
         "sharpe": 0.019450379762645114,
         "n_obs": 6158,
         "skew": 0.8068713869249058,
         "kurtosis": 11.996999078837458,
         "n_trials": 4,
-        "sr_variance": 0.001054598626802495,
-        "expected_max_sharpe": 0.03416725136987236,
+        "sr_variance": 0.000837630914621175,
+        "expected_max_sharpe": 0.030450385197997525,
         "psr": 0.9379158978050655,
-        "dsr": 0.12234632998637401
+        "dsr": 0.19227947543165486
       },
       "n_family_trials": 4
     }

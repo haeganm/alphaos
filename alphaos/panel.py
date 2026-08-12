@@ -65,39 +65,53 @@ def quarterly_series(fund: pl.DataFrame) -> pl.DataFrame:
     if dur.height == 0:
         return instants.sort(["cik", "tag", "period_end", "filed"])
 
-    # Latest filed value per (cik, tag, start, end) -- restatements collapse to
-    # the newest version of that exact period; PIT filtering happens later.
-    dur = (dur.sort("filed")
-              .group_by(["cik", "tag", "start", "end"])
-              .last()
-              .select(["cik", "tag", "start", "end", "period_days", "value", "filed"]))
+    # Every vintage is kept. Collapsing (cik, tag, start, end) to its newest
+    # filing before differencing destroyed restatement history for duration
+    # facts: a Q1 figure restated in September replaced the May original, so an
+    # August snapshot saw no Q1 at all -- and, because the YTD chain needs Q1,
+    # no derived Q2 either. The instant path never had this problem, which is
+    # why the original restatement test did not catch it.
+    dur = (dur.select(["cik", "tag", "start", "end", "period_days", "value", "filed"])
+              .unique(subset=["cik", "tag", "start", "end", "filed"], keep="last"))
 
-    # Already-quarterly rows.
+    # Already-quarterly rows, all vintages: two values for one quarter filed on
+    # different dates are two states of knowledge, not duplicates.
     direct = (dur.filter(pl.col("period_days").is_between(65, 115))
                  .select(["cik", "tag", "end", "value", "filed"])
                  .rename({"end": "period_end"})
                  .with_columns(pl.lit(False).alias("derived")))
 
-    # YTD chains: same fiscal-year start, increasing end. Differencing adjacent
-    # entries yields the quarter that the longer period added -- this recovers
-    # Q4 (annual minus 9-month) and quarterly cash flow in one operation.
-    chain = dur.sort(["cik", "tag", "start", "end"])
-    derived = (chain.with_columns([
-                    pl.col("value").shift(1).over(["cik", "tag", "start"]).alias("prev_value"),
-                    pl.col("end").shift(1).over(["cik", "tag", "start"]).alias("prev_end"),
-                    pl.col("filed").shift(1).over(["cik", "tag", "start"]).alias("prev_filed"),
-                    pl.col("period_days").shift(1).over(["cik", "tag", "start"]).alias("prev_days"),
-                ])
-                .filter(pl.col("prev_value").is_not_null() &
-                        (pl.col("period_days") - pl.col("prev_days")).is_between(65, 115))
-                .with_columns([
-                    (pl.col("value") - pl.col("prev_value")).alias("value"),
-                    # knowable only once both halves are public
-                    pl.max_horizontal("filed", "prev_filed").alias("filed"),
-                ])
-                .select(["cik", "tag", "end", "value", "filed"])
-                .rename({"end": "period_end"})
-                .with_columns(pl.lit(True).alias("derived")))
+    # YTD chains: same fiscal-year start, increasing end. Differencing recovers
+    # the quarter the longer period added -- Q4 (annual minus nine months) and
+    # quarterly cash flow in one operation.
+    #
+    # Pair every long period with every prior period exactly one quarter
+    # shorter, rather than with whichever version happened to survive a
+    # collapse. Each pair becomes knowable when its later half is filed, so a
+    # restatement of either component simply produces another pair with a later
+    # filing date, and snapshot's latest-filed-wins rule picks the right one at
+    # any as-of date.
+    prior = dur.select([
+        pl.col("cik"), pl.col("tag"), pl.col("start"),
+        pl.col("end").alias("p_end"), pl.col("period_days").alias("p_days"),
+        pl.col("value").alias("p_value"), pl.col("filed").alias("p_filed"),
+    ])
+    derived = (dur.join(prior, on=["cik", "tag", "start"], how="inner")
+                  .filter((pl.col("p_end") < pl.col("end")) &
+                          (pl.col("period_days") - pl.col("p_days")).is_between(65, 115))
+                  .with_columns([
+                      (pl.col("value") - pl.col("p_value")).alias("value"),
+                      pl.max_horizontal("filed", "p_filed").alias("filed"),
+                      # tie-break: same period, same knowable-at date -> prefer
+                      # the pair built from the freshest components
+                      pl.min_horizontal("filed", "p_filed").alias("_older_half"),
+                  ])
+                  .sort(["cik", "tag", "end", "filed", "_older_half"],
+                        descending=[False, False, False, False, True])
+                  .unique(subset=["cik", "tag", "end", "filed"], keep="first")
+                  .select(["cik", "tag", "end", "value", "filed"])
+                  .rename({"end": "period_end"})
+                  .with_columns(pl.lit(True).alias("derived")))
 
     out = pl.concat([instants, direct, derived])
     # Prefer a directly reported quarter over a derived one *for the same filing
@@ -298,6 +312,8 @@ def data_version(artifacts: list) -> str:
 def build(fundamentals_path=paths.FUNDAMENTALS,
           universe_path=paths.UNIVERSE,
           prices_path=paths.PRICES,
+          events_path=paths.EVENTS,
+          factors_path=paths.FACTORS,
           start=date(2010, 1, 1), end: date | None = None,
           freq: str = "monthly") -> dict:
     end = end or date.today()
@@ -327,7 +343,10 @@ def build(fundamentals_path=paths.FUNDAMENTALS,
     disc.write_parquet(PANEL_PATH)
     emb.write_parquet(EMBARGO_PANEL_PATH)
 
-    dv = data_version([fundamentals_path, universe_path, prices_path, PANEL_PATH])
+    # Event studies and factor checks use these files without joining them into
+    # the panel, but they are still part of the evidence behind an experiment.
+    dv = data_version([fundamentals_path, universe_path, prices_path,
+                       events_path, factors_path, PANEL_PATH])
     meta = {
         "data_version": dv,
         "built_at": date.today().isoformat(),

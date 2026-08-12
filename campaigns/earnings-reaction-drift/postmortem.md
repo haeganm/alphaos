@@ -1,5 +1,25 @@
 # Campaign post-mortem: post-earnings-announcement drift
 
+> **Second re-run 2026-08-12 after an external review. Outputs reproduce
+> exactly.**
+>
+> That review fixed a nondeterminism in the cross-sectional engine (unspecified
+> row order decided tied ranks) and a point-in-time defect in duration-fact
+> restatements. Neither touches this campaign: event studies read filings and
+> prices, not the fundamentals panel. All four primary outputs reproduce to the
+> digit, which is itself worth recording -- it means the event engine's results
+> are stable across processes and across a data rebuild.
+>
+> Factor-alpha enforcement was also added to the skeptic. It does not apply
+> here: there is no factor regression for an event study, so the check is
+> recorded as not-applicable rather than silently passing. If an event-driven
+> strategy ever reaches the vault, its factor exposure will need a separate
+> answer.
+>
+> The only movement is the deflated Sharpe, which shifted with the family
+> variance (trial 3: 0.777 -> 0.856, still short of the 0.95 floor). Verdicts
+> unchanged: 0 of 4.
+
 > **REVISED 2026-08-11 after the harness hardening pass. The original reading of
 > this campaign was wrong and is corrected below.**
 >

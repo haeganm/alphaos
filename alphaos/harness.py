@@ -267,7 +267,7 @@ def run_cross_sectional(spec: dict, wide: pl.DataFrame, *,
     for d in use_dates:
         g = df.filter((pl.col("asof") == d) &
                       pl.col("signal").is_finite() &
-                      pl.col(fwd_col).is_not_null())
+                      pl.col(fwd_col).is_not_null()).sort("ticker")
         members = int(df.filter(pl.col("asof") == d).height)
         n = g.height
         if n < s["min_names"]:

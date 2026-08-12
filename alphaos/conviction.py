@@ -42,7 +42,8 @@ def current_book(spec: dict, wide: pl.DataFrame, n: int = 10) -> dict:
     s = spec_mod.validate(spec)
     df = wide.with_columns(harness.eval_expr(s["signal"]).alias("signal"))
     latest = df["asof"].max()
-    g = df.filter((pl.col("asof") == latest) & pl.col("signal").is_finite())
+    g = (df.filter((pl.col("asof") == latest) & pl.col("signal").is_finite())
+           .sort("ticker"))
     if g.height < s["min_names"]:
         return {"asof": latest, "long": [], "short": [],
                 "note": f"only {g.height} names with a signal; spec requires "

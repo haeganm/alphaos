@@ -72,6 +72,16 @@ def test_abandoned_trials_still_count(reg):
     assert reg.family_trial_count("fam") == 2   # abandonment does not un-try it
 
 
+def test_repeated_abandon_does_not_forge_another_audit_event(reg):
+    e = _reg(reg, {"s": 1})
+    assert reg.abandon(e, "stopped") is True
+    assert reg.abandon(e, "stopped again") is False
+    n = reg.con.execute(
+        "select count(*) from registry_events where exp_id=? and event='abandon'", [e]
+    ).fetchone()[0]
+    assert n == 1
+
+
 def test_family_sharpe_variance_feeds_the_dsr(reg):
     for i, s in enumerate([0.1, 0.2, 0.3]):
         e = _reg(reg, {"s": i})

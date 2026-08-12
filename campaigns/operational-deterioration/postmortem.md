@@ -1,6 +1,47 @@
 # Campaign post-mortem: operational deterioration in filings
 
-> **Re-run 2026-08-11 after the harness hardening pass. Conclusions unchanged.**
+> **Second re-run 2026-08-12 after an external review. Conclusions unchanged;
+> one number is now more interesting than it was.**
+>
+> Two further fixes, both affecting this campaign:
+>
+> **Duration-fact restatements were being discarded.** `quarterly_series`
+> collapsed each (company, tag, period) to its newest filing *before*
+> differencing YTD chains, so an earlier vintage vanished. Concretely: Q1
+> revenue filed in May, restated in September, left an August snapshot with no
+> Q1 at all -- and therefore no derived Q2 either. The instant path never had
+> this defect, which is why the original restatement test passed. Rebuilding
+> recovers **60,810 periods that now carry multiple vintages** and raises the
+> quarterly series from 511,835 to 563,842 observations.
+>
+> **Factor alpha is now enforced.** The harness always computed FF3+MOM alpha
+> and the docstring always claimed a factor bet should die here, but no check
+> read it. It is now fatal at |t| >= 2.0 with the predicted sign.
+>
+> | # | Variant | Effect /mo | t | FF4 alpha t |
+> |---|---------|-----------:|--:|------------:|
+> | 1 | inventory − revenue growth | −0.016% | 0.05 | −0.26 |
+> | 2 | inventory growth alone | −0.166% | 0.59 | −1.20 |
+> | 3 | receivables − revenue growth | +0.091% | 0.36 | +0.02 |
+> | 4 | inventory / revenue ratio | +0.094% | 0.34 | +0.18 |
+> | 5 | earnings − cash flow growth | −0.339% | 1.67 | **−3.44** |
+>
+> All five remain FAILED. Variants 1-4 are unambiguously dead: near-zero
+> effects, no alpha, and 1 and 3 now also fail subperiod agreement.
+>
+> **Variant 5 is the one to note.** Its factor alpha (t = −3.44) is
+> substantially stronger than its raw spread (t = −1.67), meaning market, size,
+> value and momentum exposure were working *against* the signal and partially
+> masking it. It passes sign, concentration, subperiod, doubled costs, the
+> placebo, the high-coverage retest and now factor alpha, and fails on raw
+> significance and the deflated Sharpe (0.794 against a 0.95 floor). That is
+> still a failure and must not be reported as anything else -- but it is a
+> failure of the multiple-testing bar with a real residual alpha underneath,
+> which is a different situation from the other four. If this mechanism is ever
+> revisited it must be pre-registered afresh, in a new family, and clear the
+> bar on its own evidence rather than inheriting this note's optimism.
+
+> **First re-run 2026-08-11 after the harness hardening pass. Conclusions unchanged.**
 >
 > All five verdicts remain FAILED and the mechanism-level lessons below still
 > hold. Two things did change and are worth recording:

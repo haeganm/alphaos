@@ -102,6 +102,17 @@ def test_a_strong_clean_result_can_survive(reg):
     assert out["verdict"] == R.SURVIVED_DISCOVERY, out["reason"]
 
 
+def test_an_unrunnable_placebo_is_fatal(reg, monkeypatch):
+    """Missing placebo evidence is not evidence that the placebo passed."""
+    monkeypatch.setattr(
+        skeptic.harness, "run_event_study",
+        lambda *a, **k: {"engine": "event_study", "error": "too few events"})
+    out = _crit(reg, _results(mean=0.02, n=800, t_bhar=12.0,
+                              mean_bhar_ci=[0.012, 0.028]))
+    placebo = next(c for c in out["checks"] if c["check"] == "placebo")
+    assert not placebo["passed"]
+
+
 def test_dsr_hurdle_rises_with_family_trials(reg):
     """Same result, more prior trials in the family, less credit.
 

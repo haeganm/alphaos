@@ -25,6 +25,13 @@ MAX_BEST_PERIOD_SHARE = 0.50    # cross-sectional: nor by one lucky month
 MIN_COVERAGE = 0.60
 PLACEBO_MAX_ABS_T = 2.5
 MIN_NEUTRALIZER_COVERAGE = 0.5  # a requested neutraliser must have real data
+# Alpha must survive Fama-French 3 + momentum at the same bar as the raw
+# effect. A spread whose returns are explained by market, size, value or
+# momentum exposure is not a discovery -- it is a factor bet that several
+# providers already sell for about five basis points. The harness has always
+# computed this and the docstring always claimed it mattered; until now nothing
+# enforced it, so a pure momentum repackaging could have reached the vault.
+MIN_ABS_ALPHA_T = 2.0
 
 
 def _primary(results: dict) -> tuple[float, float]:
@@ -122,6 +129,26 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
     else:
         checks.append(_check("subperiod_sign", False, "too few observations to split"))
 
+    # 5a. factor alpha (cross-sectional only; there is no factor regression for
+    # an event study, so the check does not apply rather than silently passing)
+    if not is_event:
+        if results.get("factor_alpha_error"):
+            checks.append(_check(
+                "factor_alpha", False,
+                f"factor regression did not run ({results['factor_alpha_error']}), so "
+                f"existing-factor exposure could not be ruled out"))
+        else:
+            a = results.get("ff4_alpha", float("nan"))
+            at = results.get("ff4_alpha_t", float("nan"))
+            betas = results.get("ff4_betas", {})
+            ok = (np.isfinite(a) and np.isfinite(at)
+                  and np.sign(a) == predicted and abs(at) >= MIN_ABS_ALPHA_T)
+            checks.append(_check(
+                "factor_alpha", ok,
+                f"FF3+MOM alpha {a:+.5f} (t {at:+.2f}, needs |t| >= "
+                f"{MIN_ABS_ALPHA_T} with the predicted sign); loadings "
+                f"{ {k: round(v, 2) for k, v in betas.items()} }"))
+
     # 5b. a requested neutraliser that had no data is a mislabelled result
     cov = results.get("neutralize_coverage") or {}
     if cov:
@@ -146,7 +173,7 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
 
         placebo = harness.run_cross_sectional(s, wide, shuffle_seed=1234)
         pt = placebo.get("t_gross", float("nan"))
-        checks.append(_check("placebo", not np.isfinite(pt) or abs(pt) <= PLACEBO_MAX_ABS_T,
+        checks.append(_check("placebo", np.isfinite(pt) and abs(pt) <= PLACEBO_MAX_ABS_T,
                              f"shuffled-signal gross |t| = {abs(pt):.2f} "
                              f"(gross, so the cost drag of random turnover is not "
                              f"mistaken for predictive content)"))
@@ -163,7 +190,7 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
     else:
         placebo = harness.run_event_study(s, shuffle_seed=1234)
         _, pt = _primary(placebo)
-        checks.append(_check("placebo", not np.isfinite(pt) or abs(pt) <= PLACEBO_MAX_ABS_T,
+        checks.append(_check("placebo", np.isfinite(pt) and abs(pt) <= PLACEBO_MAX_ABS_T,
                              f"shuffled-condition |t| = {abs(pt):.2f}"))
         child_specs.append(("skeptic:placebo", s, placebo))
 

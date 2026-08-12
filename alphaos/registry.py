@@ -188,7 +188,8 @@ class Registry:
         recorded abandonments that never happened.
         """
         row = self.get(exp_id)
-        if row is None or row["results_json"] is not None:
+        if (row is None or row["results_json"] is not None
+                or row["status"] == ABANDONED):
             return False
         self.con.execute("update experiments set status=? where id=?", [ABANDONED, exp_id])
         self._event(exp_id, "abandon", {"reason": reason})

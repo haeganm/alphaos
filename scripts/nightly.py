@@ -24,7 +24,7 @@ import json
 import pathlib
 import sys
 import traceback
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import polars as pl
@@ -69,18 +69,23 @@ def refresh_data() -> str:
     return meta["data_version"]
 
 
-def forward_grade(reg: R.Registry, data_version: str):
+def forward_grade(reg: R.Registry, data_version: str) -> bool:
     """Re-run surviving specs on rebalances that postdate their registration."""
     live = reg.by_verdict(R.VAULT) + reg.by_verdict(R.SURVIVED_DISCOVERY)
     if not live:
         log("no surviving specs to forward-grade")
-        return
+        return True
     wides: dict[int, object] = {}
+    ok = True
     for row in live:
         try:
             spec = spec_mod.validate(json.loads(row["spec_json"]))
             frozen = row["registered_at"][:10]
-            fwd_spec = dict(spec, start=frozen)
+            # Strictly post-registration. An inclusive start would count a
+            # same-day filing (or a same-day rebalance) that was already known
+            # when the hypothesis was frozen as forward evidence.
+            start = date.fromisoformat(frozen) + timedelta(days=1)
+            fwd_spec = dict(spec, start=start.isoformat())
 
             # all_data, not the discovery panel. Grading a frozen spec on data
             # that postdates it is evaluation, not search; reading the discovery
@@ -123,7 +128,9 @@ def forward_grade(reg: R.Registry, data_version: str):
                                    f"forward performance decayed: {summary}")
                 log(f"  {row['id']}: DEMOTED")
         except Exception:                            # noqa: BLE001
+            ok = False
             log(f"  {row['id']}: forward grading FAILED\n{traceback.format_exc()}")
+    return ok
 
 
 def main() -> int:
@@ -140,7 +147,7 @@ def main() -> int:
 
     reg = R.Registry()
     try:
-        forward_grade(reg, data_version)
+        ok = forward_grade(reg, data_version) and ok
         conviction.build(reg=reg)
         log(f"conviction sheet rebuilt; registry: {json.dumps(reg.summary())}")
         log(f"registry exported to {export_registry(reg)}")

@@ -119,6 +119,9 @@ def build(ciks: list[str], out_path=paths.EVENTS, *,
                   f"({failed} failures)", flush=True)
 
     fetched = _normalize(pl.DataFrame(rows, schema=_RAW_SCHEMA, orient="row"))
+    if wanted and failed == len(wanted):
+        raise RuntimeError(
+            f"all {len(wanted)} CIK fetches failed; existing event archive left untouched")
     out_path = str(out_path)
     existing = None
     if os.path.exists(out_path):
