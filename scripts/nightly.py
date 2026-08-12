@@ -41,6 +41,15 @@ DEMOTE_AFTER_DAYS = 180
 MIN_FORWARD_PERIODS = 3
 
 
+def today_utc() -> date:
+    """The registry stamps registered_at in UTC, so ages must be measured in
+    UTC too. Comparing a UTC registration against a local `date.today()` made a
+    spec registered minutes ago report "(-1d old)" -- harmless in that log line,
+    but the same subtraction decides the 180-day demotion window and the
+    forward-grading start date, where an off-by-one is a real one."""
+    return datetime.now(timezone.utc).date()
+
+
 def log(msg: str):
     line = f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} {msg}"
     print(line, flush=True)
@@ -51,7 +60,7 @@ def log(msg: str):
 
 def refresh_data() -> str:
     uni = pl.read_parquet(paths.UNIVERSE)
-    current = universe.members_on(uni, date.today())
+    current = universe.members_on(uni, today_utc())
     log(f"refreshing prices for {len(current)} current members")
     ok, missing = prices.fetch_all(current + prices.BENCHMARKS + prices.SECTOR_ETFS)
     log(f"  prices: {ok} ok, {len(missing)} without data")
@@ -113,7 +122,7 @@ def forward_grade(reg: R.Registry, data_version: str) -> bool:
                 res = harness.run_event_study(fwd_spec, all_data=True)
 
             arr = np.asarray(res.get("returns_signed", []), dtype=float)
-            age = (date.today() - date.fromisoformat(frozen)).days
+            age = (today_utc() - date.fromisoformat(frozen)).days
             if arr.size < MIN_FORWARD_PERIODS:
                 summary = (f"{arr.size} periods since {frozen} ({age}d old); "
                            f"too early to judge")
@@ -130,7 +139,7 @@ def forward_grade(reg: R.Registry, data_version: str) -> bool:
                 decayed = age >= DEMOTE_AFTER_DAYS and arr.mean() <= 0
 
             reg.record_forward(row["id"], {
-                "as_of": date.today().isoformat(), "frozen_at": frozen,
+                "as_of": today_utc().isoformat(), "frozen_at": frozen,
                 "n_periods": int(arr.size),
                 "mean": float(arr.mean()) if arr.size else None,
                 "summary": summary, "data_version": data_version})
