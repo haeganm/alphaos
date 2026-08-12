@@ -1,5 +1,40 @@
 # Campaign post-mortem: governance and bad-news 8-K disclosures
 
+> **REVISED 2026-08-12. The positive-drift finding does not survive honest
+> inference.**
+>
+> Inference now runs on a calendar-time portfolio rather than on the array of
+> events (see the earnings-reaction-drift post-mortem for why: same-day
+> clustering plus 61-day window overlap leaves ~50 independent blocks in the
+> whole discovery span, not tens of thousands).
+>
+> | # | Event | Effect | t naive | **t calendar** |
+> |---|---|---:|---:|---:|
+> | 1 | 5.02 departures | +0.35% | **+2.06** | **−1.05** |
+> | 2 | 2.05 restructuring | +1.17% | +1.60 | −1.24 |
+> | 3 | 2.06 impairment | −1.04% | −0.67 | +0.85 |
+> | 4 | 4.01 auditor change | +2.19% | +0.26 | −1.23 |
+> | 5 | 5.02 vs sector | +0.21% | +1.50 | −0.78 |
+>
+> (The t column is signed against the hypothesis: these predicted a negative
+> drift, so a positive effect yields a negative t. Trial 1's effect is still
+> positive and still falsifies its predicted sign — it simply is not
+> significant in either direction.)
+>
+> **What changes.** The original write-up said departures showed "a real,
+> broad, sign-reversed result" at t = 2.06 with a clean placebo, and treated
+> "departures are slow-diffusing good news" as a live idea deserving its own
+> registration. At t = 1.05 there is no result to explain. The falsification of
+> the original hypothesis stands — the effect is positive where I predicted
+> negative — but the positive drift is not distinguishable from zero, and the
+> follow-up hypothesis is no longer motivated by anything in this data.
+>
+> **What does not change.** The structural lesson is unaffected and if anything
+> reinforced: rare disclosures (243 impairments, 74 auditor changes) cannot be
+> tested in a 500-name universe, and the 8-K item-code family looks exhausted.
+
+
+
 - **Campaign:** `governance-events-2026-08` — **Family:** `governance_events` (5 trials)
 - **Outcome: 0 of 5 survived discovery.** Four of five were falsified on sign.
 

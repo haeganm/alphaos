@@ -69,8 +69,12 @@ def refresh_data() -> str:
     log("topping up Form 4 acceptance stamps and the current insider quarter")
     events.build(ciks, out_path=paths.FORM4_META, forms=events.FORM4,
                  recent_only=True, merge=True)
-    today = date.today()
-    insiders.build(ciks, only_quarter=f"{today.year}q{(today.month - 1) // 3 + 1}")
+    # SEC publishes the bulk files in arrears (on 2026-08-11, 2026q1 is
+    # newest). Asking only for the calendar's current quarter makes every
+    # nightly fail until that archive exists.
+    q = insiders.latest_available_quarter()
+    log(f"  newest published insider quarter: {q}")
+    insiders.build(ciks, only_quarter=q)
 
     meta = panel.build()
     log(f"panel rebuilt, data_version={meta['data_version']}")

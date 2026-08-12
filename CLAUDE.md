@@ -102,6 +102,12 @@ after 180 days of non-positive forward returns.
   collapsed under size/sector neutralisation because there is no small-cap tail
   here. Before proposing a mechanism, ask whether 500 large caps can generate
   enough of it. If the honest answer is no, say so instead of testing it.
+- **An event count is not a sample size.** Event studies are scored on a
+  calendar-time portfolio, not on the array of events: same-day clustering and
+  window overlap leave ~50 independent blocks across 2010-2022 regardless of
+  how many events there are. `results["t_bhar"]` is the calendar-time
+  statistic; `t_bhar_naive` is kept only so the gap stays visible. Never quote
+  the naive one.
 - **Every event study must be read against its matched random-date placebo.**
   This data has a structural positive drift baseline. The placebo has now
   killed two results that the benchmark alone would have blessed (t = 3.94 and

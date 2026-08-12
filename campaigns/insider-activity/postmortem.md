@@ -1,5 +1,36 @@
 # Campaign post-mortem: insider buying
 
+> **REVISED 2026-08-12 after an external review. Two data corrections and one
+> inference correction; conclusions unchanged and strengthened.**
+>
+> **Amendment duplicates.** 227 open-market transaction identities appeared
+> under more than one accession, 169 on different filing dates, with gaps
+> running to 1,185 days — Form 4/A amendments re-reporting a trade that was
+> already public. Left alone they create events dated long after the market
+> learned the information. Transactions now resolve to their earliest
+> disclosure. Cluster events fell from 1,034 to 1,030, and usable cluster
+> events after price matching from ~470 to 442.
+>
+> **Cluster construction.** Two same-day bugs the review caught: filings that
+> shared a date could take an acceptance timestamp from before the third
+> filing was public, and insiders from a just-completed cluster could be
+> counted again exactly 30 days later. Both fixed and pinned by tests.
+>
+> **Calendar-time inference** (see the earnings-reaction-drift post-mortem):
+>
+> | # | Variant | Effect | t naive | **t calendar** |
+> |---|---|---:|---:|---:|
+> | 1 | cluster, +1..+61 | −0.28% | −0.10 | −0.37 |
+> | 2 | any officer buy, +1..+61 | +0.43% | +1.36 | **+0.91** |
+> | 3 | cluster, +1..+21 | +0.11% | +0.78 | +0.28 |
+> | 4 | cluster vs sector | −0.31% | −0.59 | −0.51 |
+>
+> The conclusions below stand. Variant 2 was already dead on its placebo; it is
+> now also insignificant on its own statistic, so the campaign no longer rests
+> on the placebo alone to reject it.
+
+
+
 - **Campaign:** `insider-activity-2026-08` — **Family:** `insider_buying` (4 trials)
 - **Data:** 1.32M Form 4 transactions, 753 issuers, 2009-2026, built for this
   campaign. 31k open-market purchases against 433k sales.

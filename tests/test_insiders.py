@@ -8,6 +8,7 @@ a cluster by its first purchase, or by transaction date rather than filing
 acceptance, is a lookahead of days to weeks that no downstream robustness test
 would catch.
 """
+import zipfile
 from datetime import date
 
 import polars as pl
@@ -40,6 +41,34 @@ def _frame(rows, tmp_path):
     return p
 
 
+def test_joint_filing_preserves_all_relationship_flags(tmp_path):
+    """The transaction table has no owner key, so role aggregation must not
+    depend on which reporting owner happens to appear first."""
+    p = tmp_path / "quarter.zip"
+    with zipfile.ZipFile(p, "w") as zf:
+        zf.writestr(
+            "SUBMISSION.tsv",
+            "ACCESSION_NUMBER\tFILING_DATE\tPERIOD_OF_REPORT\tDOCUMENT_TYPE\t"
+            "ISSUERCIK\tISSUERTRADINGSYMBOL\n"
+            "a1\t02-MAR-2015\t01-MAR-2015\t4\t1\tAAA\n")
+        zf.writestr(
+            "NONDERIV_TRANS.tsv",
+            "ACCESSION_NUMBER\tTRANS_DATE\tTRANS_CODE\tTRANS_SHARES\t"
+            "TRANS_PRICEPERSHARE\tTRANS_ACQUIRED_DISP_CD\t"
+            "SHRS_OWND_FOLWNG_TRANS\tDIRECT_INDIRECT_OWNERSHIP\n"
+            "a1\t01-MAR-2015\tP\t100\t10\tA\t500\tD\n")
+        zf.writestr(
+            "REPORTINGOWNER.tsv",
+            "ACCESSION_NUMBER\tRPTOWNERCIK\tRPTOWNERNAME\t"
+            "RPTOWNER_RELATIONSHIP\tRPTOWNER_TITLE\n"
+            "a1\t2\tFund\tTenPercentOwner\tN/A\n"
+            "a1\t3\tExecutive\tOfficer\tCEO\n")
+    got = insiders.parse_quarter(str(p), {"0000000001"})
+    assert got.height == 1
+    assert "Officer" in got["relationship"][0]
+    assert got["owner_cik"][0] == "2|3"
+
+
 def test_cluster_fires_on_the_third_distinct_insider(tmp_path):
     p = _frame([
         _txn("o1", date(2015, 3, 2)),
@@ -60,6 +89,17 @@ def test_cluster_carries_the_completing_filings_acceptance_stamp(tmp_path):
     ], tmp_path)
     ev = insiders.event_table("insider_cluster_buy", p)
     assert ev["accepted_utc"][0] == "2015-03-09T22:15:00Z"
+
+
+def test_same_day_cluster_waits_for_the_third_acceptance(tmp_path):
+    """Source row order cannot make a later filing visible earlier."""
+    p = _frame([
+        _txn("o3", date(2015, 3, 9), accepted="2015-03-09T22:00:00Z"),
+        _txn("o1", date(2015, 3, 9), accepted="2015-03-09T14:00:00Z"),
+        _txn("o2", date(2015, 3, 9), accepted="2015-03-09T16:00:00Z"),
+    ], tmp_path)
+    ev = insiders.event_table("insider_cluster_buy", p)
+    assert ev["accepted_utc"][0] == "2015-03-09T22:00:00Z"
 
 
 def test_transaction_dates_never_set_the_event_date(tmp_path):
@@ -91,6 +131,20 @@ def test_overlapping_clusters_collapse_to_one_event(tmp_path):
     rows = [_txn(f"o{i}", date(2015, 3, i)) for i in range(1, 10)]
     ev = insiders.event_table("insider_cluster_buy", _frame(rows, tmp_path))
     assert ev.height == 1, "a sustained buying episode is one event, not a run"
+
+
+def test_new_cluster_does_not_reuse_prior_insiders_at_window_boundary(tmp_path):
+    rows = [
+        _txn("o1", date(2015, 1, 29)),
+        _txn("o2", date(2015, 1, 30)),
+        _txn("o3", date(2015, 1, 31)),
+        # Exactly 30 days after the first fire. Two new insiders are not a new
+        # three-person cluster; o3 belongs to the prior episode.
+        _txn("o4", date(2015, 3, 2)),
+        _txn("o5", date(2015, 3, 2)),
+    ]
+    ev = insiders.event_table("insider_cluster_buy", _frame(rows, tmp_path))
+    assert ev.height == 1
 
 
 def test_only_open_market_purchases_count(tmp_path):
@@ -132,3 +186,9 @@ def test_events_arrive_in_the_shape_the_engine_expects(tmp_path):
 
 def test_missing_file_yields_an_empty_table_not_a_crash(tmp_path):
     assert insiders.event_table("insider_cluster_buy", tmp_path / "nope.parquet").is_empty()
+
+
+def test_latest_available_quarter_falls_back_from_unpublished_current(monkeypatch):
+    monkeypatch.setattr(
+        insiders, "download_quarter", lambda q: "cached.zip" if q == "2026q1" else None)
+    assert insiders.latest_available_quarter(date(2026, 8, 11)) == "2026q1"

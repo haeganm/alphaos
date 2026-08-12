@@ -54,7 +54,7 @@ def main(argv: list[str]) -> int:
         # Acceptance timestamps first: the quarterly data sets carry a filing
         # date but no clock, and an event study needs the clock.
         events.build(ciks, out_path=paths.FORM4_META, forms=events.FORM4)
-    insiders.build(ciks)
+        insiders.build(ciks)
 
     print("\n== 7/7 panel + embargo split ==")
     meta = panel.build()

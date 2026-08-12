@@ -67,51 +67,63 @@ these numbers mean something.
 
 ## Findings so far
 
-**Eight campaigns, 33 pre-registered hypotheses, zero survivors.** That is the
+**Eight campaigns, 34 pre-registered hypotheses, zero survivors.** That is the
 expected base rate for one person mining public data, and the reason the ledger
 exists. The asset being built is the map of where the edge is not.
 
 | Family | N | Best result | Died on |
 |---|--:|---|---|
 | `accruals` | 4 | **−0.434%/mo, t = 2.49, FF4 alpha t = −3.19** | **DSR alone (0.887 vs 0.95)** |
-| `pead` | 4 | +0.29%/60d, t = 2.79, clean placebo | DSR (0.856) |
-| `profitability` | 4 | +0.376%/mo, t = 1.07, HML −0.44 | significance, alpha, DSR |
-| `net_issuance` | 4 | −0.419%/mo, t = 1.40 | significance, alpha, DSR |
-| `asset_growth` | 4 | −0.291%/mo, t = 0.92 | significance, DSR |
 | `operational_deterioration` | 5 | −0.339%/mo, t = 1.67, alpha t = −3.44 | significance, DSR |
-| `governance_events` | 5 | +0.274%/61d, t = 2.06 | **wrong sign** |
-| `insider_buying` | 4 | +0.358%/61d, t = 1.34 | **placebo t = 3.13** |
+| `pead` | 4 | +0.66%/60d, t = 1.84 | significance, DSR |
+| `net_issuance` | 4 | −0.419%/mo, t = 1.40 | significance, alpha, DSR |
+| `profitability` | 4 | +0.376%/mo, t = 1.07, HML −0.44 | significance, alpha, DSR |
+| `governance_events` | 5 | +0.35%/61d, t = 1.05 | wrong sign, significance |
+| `asset_growth` | 4 | −0.291%/mo, t = 0.92 | significance, DSR |
+| `insider_buying` | 4 | +0.43%/61d, t = 0.91 | significance, placebo |
 
-Three patterns worth more than any single verdict:
+Event-study t-statistics are calendar-time (see below); earlier revisions of
+this table quoted event-level figures that were substantially inflated.
+
+Four patterns worth more than any single verdict:
+
+**Event counts are not sample sizes.** Item 2.02 produces 48,276 events on
+4,014 distinct dates, and a 61-day window makes every event overlap every other
+one filed within three months — roughly **fifty independent blocks** across the
+whole discovery span. Inference now runs on a calendar-time portfolio (Fama
+1998) rather than on the event array. This cut the best earnings-drift result
+from t = 2.81 to t = 0.88 and removed a t = 2.06 governance "finding"
+entirely. Both had previously been described here as near-misses; neither was.
 
 **The universe is the binding constraint, not the mechanisms.** Rare-disclosure
-events (impairments, auditor changes) and insider cluster buys both failed for
-the same structural reason: 500 large caps do not generate enough of them.
-Asset growth collapsed sixfold under size/sector neutralisation because the S&P
-500 has no small-cap tail for it to work in.
+events (243 impairments, 74 auditor changes) and insider cluster buys (1,030 in
+17 years) fail for want of events, not want of effect. Asset growth collapsed
+sixfold under size/sector neutralisation because the S&P 500 has no small-cap
+tail for it to work in.
 
-**The placebo earns its keep repeatedly.** It killed a t = 3.94 earnings-drift
-result and a t = 1.34 insider result by showing that random-date events drift
-just as much. Any event study in this repo must be read against it, never
-against the benchmark alone.
+**The placebo earns its keep repeatedly.** It killed an earnings-drift result
+and an insider result by showing that random-date events drift just as much.
+Any event study here must be read against it, never against the benchmark alone.
 
-**Accruals is the standing candidate.** It passed every check except the
-multiple-testing hurdle, with a factor-model R² of 0.067 — almost none of it is
-factor exposure. Had it been registered alone it would have survived; testing
-three sibling variants correctly raised its bar. It needs out-of-sample time,
-not more variants. See `campaigns/accruals-v2/postmortem.md` for the full
-argument, including why the floor will not be relaxed to let it through.
+**Accruals is the standing candidate, and now the only one.** It passed every
+check except the multiple-testing hurdle, with a factor-model R² of 0.067 —
+almost none of it is factor exposure. It is cross-sectional, so the
+calendar-time correction does not touch it: its 150 monthly periods were
+already non-overlapping and sequential by construction. Had it been registered
+alone it would have survived; testing three sibling variants correctly raised
+its bar. It needs out-of-sample time, not more variants. See
+`campaigns/accruals-v2/postmortem.md`, including why the floor will not be
+relaxed to let it through.
 
 `campaigns/_prior-projects/` records the mechanisms retired by TechnicalEngine,
 BTCTA, MYOWNTA and Density Desk. All four found no edge; that is the prior this
 lab was calibrated against, and eight campaigns later it still holds.
 
-Both post-mortems carry a revision note from the 2026-08-11 hardening pass.
-Three harness bugs changed the numbers — most importantly, event t-statistics
-were computed on arrays ordered by company rather than by date, so the
-Newey-West correction was correcting for the wrong dependence structure. The
-verdicts did not change; the reasons did, and the corrections are recorded
-rather than quietly absorbed.
+Post-mortems carry revision notes rather than edits. The earnings campaign has
+been revised three times — event ordering, then the placebo reading, then
+calendar-time inference — and its verdict was 0 of 4 on every pass. The
+verdicts have never changed; the reasons have been wrong twice, and both
+corrections are recorded in place.
 
 ## Honest limitations
 

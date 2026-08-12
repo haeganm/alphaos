@@ -593,10 +593,12 @@ def run_event_study(spec: dict, *, events_path=paths.EVENTS,
             reaction = float(rs - rb)
 
         records.append({
-            "ticker": rec["ticker"], "date": fd,
+            "ticker": rec["ticker"], "date": fd, "accn": row.get("accn") or "",
             "car": float(np.nansum(excess)),
             "bhar": float((s1 / s0 - 1.0) - (b1 / b0 - 1.0)),
             "excess": excess, "reaction": reaction,
+            # calendar dates the window covers, for calendar-time aggregation
+            "win_dates": dts[i + w0: i + w1 + 1],
         })
 
     cond = s.get("condition")
@@ -633,10 +635,41 @@ def run_event_study(spec: dict, *, events_path=paths.EVENTS,
     # have preserved "similar surprise" adjacency rather than temporal
     # adjacency -- the wrong dependence structure entirely for the CI that
     # decides the verdict.
-    records.sort(key=lambda r: r["date"])
+    records.sort(key=lambda r: (r["date"], r["ticker"], r["accn"]))
     arr = np.asarray([r["bhar"] for r in records], dtype=float)
-    signed = arr * s["predicted_sign"]      # see run_cross_sectional
     car_arr = np.asarray([r["car"] for r in records], dtype=float)
+
+    # Calendar-time aggregation, and it is the statistic that decides the
+    # verdict. Treating each event as an independent observation is badly
+    # wrong here: 8-K item 2.02 produces 48,276 events on only 4,014 distinct
+    # dates (twelve a day, arriving in earnings seasons), and with a 61-day
+    # window every event overlaps every other event filed within three months,
+    # so the whole 2010-2022 discovery span holds roughly fifty independent
+    # blocks. Event-level inference was therefore claiming tens of thousands of
+    # observations where the data supplies dozens -- the same error BTCTA
+    # measured at ~24x when it moved to blocked resampling.
+    #
+    # The fix is the standard calendar-time portfolio (Fama 1998): average
+    # every active event's excess return within each calendar day, and do
+    # inference on that genuinely sequential daily series. Same-day events
+    # become one observation because they ARE one observation, and the
+    # remaining overlap is handled by Newey-West at the window length.
+    by_sum: dict = {}
+    by_n: dict = {}
+    for r in records:
+        for d, x in zip(r["win_dates"], r["excess"]):
+            if np.isfinite(x):
+                by_sum[d] = by_sum.get(d, 0.0) + float(x)
+                by_n[d] = by_n.get(d, 0) + 1
+    cal_dates = sorted(by_sum)
+    cal = np.asarray([by_sum[d] / by_n[d] for d in cal_dates], dtype=float)
+    win_len = w1 - w0 + 1
+    cal_signed = cal * s["predicted_sign"]
+    t_calendar = stats.newey_west_tstat(cal_signed, lags=win_len)
+    # scaled to the window so it is comparable with the per-event BHAR
+    calendar_effect = float(cal.mean() * win_len)
+    clo, chi = stats.block_bootstrap_mean_ci(cal_signed)
+    signed = cal_signed                      # what DSR and the skeptic score
     path_sum = np.zeros(w1 - w0 + 1)
     path_n = np.zeros(w1 - w0 + 1)
     for r in records:
@@ -645,7 +678,6 @@ def run_event_study(spec: dict, *, events_path=paths.EVENTS,
         path_n[:len(cum)] += 1
 
     top10 = np.sort(np.abs(arr))[-10:].sum()
-    lo, hi = stats.block_bootstrap_mean_ci(signed)   # one shared block rule
     n_names = len({r["ticker"] for r in records})
 
     return {
@@ -655,10 +687,17 @@ def run_event_study(spec: dict, *, events_path=paths.EVENTS,
         "condition": cond,
         "n_events": n, "n_before_condition": n_all, "skipped": skipped,
         "n_distinct_names": n_names,
+        # effect size, per event
         "mean_bhar": float(arr.mean()), "median_bhar": float(np.median(arr)),
-        "t_bhar": stats.newey_west_tstat(arr),
-        "mean_bhar_ci": [lo, hi],
         "mean_car": float(car_arr.mean()),
+        # inference, on the calendar-time series -- this is what the skeptic
+        # scores. t_bhar_naive is retained only so the gap between the two is
+        # visible in the record; it is not used for any verdict.
+        "t_bhar": t_calendar,
+        "t_bhar_naive": stats.newey_west_tstat(arr),
+        "calendar_effect": calendar_effect,
+        "n_calendar_days": int(cal.size),
+        "mean_bhar_ci": [clo * win_len, chi * win_len],
         "hit_rate": float(np.mean(signed > 0)),      # of the tradable series
         "top10_share": float(top10 / max(np.abs(arr).sum(), EPS)),
         "car_path": [float(x) for x in (path_sum / np.maximum(path_n, 1))],

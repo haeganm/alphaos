@@ -313,6 +313,7 @@ def build(fundamentals_path=paths.FUNDAMENTALS,
           universe_path=paths.UNIVERSE,
           prices_path=paths.PRICES,
           events_path=paths.EVENTS,
+          insiders_path=paths.INSIDERS,
           factors_path=paths.FACTORS,
           start=date(2010, 1, 1), end: date | None = None,
           freq: str = "monthly") -> dict:
@@ -346,7 +347,7 @@ def build(fundamentals_path=paths.FUNDAMENTALS,
     # Event studies and factor checks use these files without joining them into
     # the panel, but they are still part of the evidence behind an experiment.
     dv = data_version([fundamentals_path, universe_path, prices_path,
-                       events_path, factors_path, PANEL_PATH])
+                       events_path, insiders_path, factors_path, PANEL_PATH])
     meta = {
         "data_version": dv,
         "built_at": date.today().isoformat(),

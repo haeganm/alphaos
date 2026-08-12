@@ -1,5 +1,46 @@
 # Campaign post-mortem: post-earnings-announcement drift
 
+> **THIRD REVISION 2026-08-12. The "closest candidate" claim is withdrawn.**
+>
+> Event-level inference was overstating power badly. Item 2.02 produces 48,276
+> events on only 4,014 distinct dates — twelve a day, arriving in earnings
+> seasons — and with a 61-day window every event overlaps every other event
+> filed within three months. The 2010-2022 discovery span holds roughly **fifty
+> independent blocks**, not tens of thousands of observations. Newey-West
+> applied along an array of events cannot fix that, because the dependence is
+> cross-sectional (same-day) as well as serial.
+>
+> The harness now aggregates to a calendar-time portfolio (Fama 1998): average
+> every active event's excess return within each calendar day, and run
+> inference on that genuinely sequential daily series. Same-day events become
+> one observation because they are one observation.
+>
+> | Trial | Effect | t naive | **t calendar** |
+> |---|---:|---:|---:|
+> | 1 top 30%, +2..+61 | +0.66% | +2.07 | **+1.84** |
+> | 2 bottom 30%, +2..+61 | +0.25% | +0.77 | **−0.67** |
+> | 3 top 30%, +2..+21 | +0.16% | **+2.81** | **+0.88** |
+> | 4 top 30% vs sector | +0.28% | +1.40 | **+1.09** |
+>
+> **Trial 3 was never significant.** The second revision described it as passing
+> every check but the deflated Sharpe, and called it a candidate that failed
+> only on the multiple-testing hurdle. With honest inference its t-statistic is
+> 0.88. The earlier 2.79/2.81 was an artifact of counting 6,387 overlapping,
+> season-clustered events as independent draws. Nothing in this campaign is
+> close to the bar, and the README's "closest candidate" framing for it is
+> withdrawn.
+>
+> This is the third time this campaign's headline has moved, and each move came
+> from fixing the machinery rather than from new data. That is the honest
+> record of a lab being built: the verdicts never changed — 0 of 4, every time —
+> but the reasons have been wrong twice.
+>
+> Everything below is preserved. Where it conflicts with this note, this note
+> is correct.
+
+---
+
+
 > **Second re-run 2026-08-12 after an external review. Outputs reproduce
 > exactly.**
 >

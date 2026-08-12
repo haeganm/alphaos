@@ -25,6 +25,9 @@ def _results(mean=0.01, n=400, seed=0, **over):
     arr = rng.normal(mean, 0.02, n)
     base = {
         "engine": "event_study", "mean_bhar": float(arr.mean()),
+        # the verdict is scored on the calendar-time portfolio, not the
+        # per-event average; the fixture keeps them consistent
+        "calendar_effect": float(arr.mean()),
         "t_bhar": 8.0, "mean_bhar_ci": [0.005, 0.015],
         "returns": arr.tolist(), "returns_signed": arr.tolist(),
         "top10_share": 0.02, "n_distinct_names": 200, "sharpe": 0.4,

@@ -7,7 +7,7 @@ happily as a real one. crossval_asof.py checks the same rule against an
 independent implementation, but it needs the full data build and only covers the
 event path, so these pin the boundary directly.
 """
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import polars as pl
@@ -204,3 +204,49 @@ def test_skipped_period_resets_the_book():
     res = harness.run_cross_sectional(dict(SPEC, cost_bps=10, min_names=20), p)
     assert res["skipped_periods"] == 1
     assert res["n_periods"] == 23
+
+
+def test_same_day_event_results_ignore_source_row_order(monkeypatch):
+    """Blocked statistics need a stable order when many filings share a date."""
+    event_day = date(2020, 1, 11)
+    events = pl.DataFrame({
+        "cik": [f"{i:010d}" for i in range(30)], "form": ["10-Q"] * 30,
+        "items": [""] * 30, "filing_date": [event_day] * 30,
+        "accepted_utc": ["2020-01-11T14:00:00Z"] * 30,
+        "report_date": [None] * 30, "accn": [f"a{i:02d}" for i in range(30)],
+    })
+    universe = pl.DataFrame({
+        "cik": events["cik"], "ticker": [f"T{i:02d}" for i in range(30)],
+        "price_ticker": [f"T{i:02d}" for i in range(30)],
+        "gics_sector": ["Industrials"] * 30,
+        "start": [date(2019, 1, 1)] * 30, "end": [None] * 30,
+    })
+    dates = [date(2020, 1, 1) + timedelta(days=i) for i in range(20)]
+    series = {}
+    for i in range(30):
+        closes = np.linspace(100, 110 + i, len(dates))
+        rets = np.concatenate([[np.nan], closes[1:] / closes[:-1] - 1])
+        series[f"T{i:02d}"] = (dates, closes, rets, {d: j for j, d in enumerate(dates)})
+    closes = np.linspace(100, 105, len(dates))
+    rets = np.concatenate([[np.nan], closes[1:] / closes[:-1] - 1])
+    series["SPY"] = (dates, closes, rets, {d: j for j, d in enumerate(dates)})
+
+    monkeypatch.setattr(harness, "_prepared_series", lambda path: series)
+    monkeypatch.setattr(harness.pl, "read_parquet",
+                        lambda path: events if path == "events" else universe)
+    spec = {"type": "event_study", "event": {"trigger": "10q_filed"},
+            "window": [1, 3], "predicted_sign": 1, "min_events": 30}
+    a = harness.run_event_study(spec, events_path="events", prices_path="prices",
+                                universe_path="universe")
+    events = events.reverse()
+    b = harness.run_event_study(spec, events_path="events", prices_path="prices",
+                                universe_path="universe")
+    assert a["returns"] == b["returns"]
+    # The calendar-time series is what inference runs on, so it is the thing
+    # that must be reproducible. nan-safe comparison because this toy fixture
+    # puts every event on one date and spans only three calendar days -- too
+    # few for the bootstrap, which correctly declines to invent an interval.
+    assert a["returns_signed"] == b["returns_signed"]
+    assert a["t_bhar"] == b["t_bhar"] or (
+        np.isnan(a["t_bhar"]) and np.isnan(b["t_bhar"]))
+    assert np.allclose(a["mean_bhar_ci"], b["mean_bhar_ci"], equal_nan=True)

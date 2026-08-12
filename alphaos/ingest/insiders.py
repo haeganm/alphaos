@@ -105,8 +105,15 @@ def parse_quarter(zip_path: str, issuer_ciks: set[str]) -> pl.DataFrame:
     if sub.height == 0:
         return pl.DataFrame()
 
-    # One row per reporting owner per filing; joint filings have several.
-    owner = owner.group_by("ACCESSION_NUMBER").first()
+    # NONDERIV_TRANS has no owner key, so a joint filing cannot be mapped back
+    # to one owner transaction-by-transaction. Keep the reporting group as one
+    # deterministic identity, but preserve every relationship flag: choosing
+    # an arbitrary first owner could turn an officer purchase into a non-officer
+    # purchase depending on source row order.
+    owner = owner.group_by("ACCESSION_NUMBER").agg([
+        pl.col(c).drop_nulls().unique().sort().str.join("|").alias(c)
+        for c in _OWNER_COLS if c != "ACCESSION_NUMBER"
+    ])
 
     df = (trans.join(sub, on="ACCESSION_NUMBER", how="inner")
                .join(owner, on="ACCESSION_NUMBER", how="left"))
@@ -175,9 +182,30 @@ def _open_market_buys(df: pl.DataFrame) -> pl.DataFrame:
     roughly fourteen sales per purchase in this data, and prior work in this
     repo has already established that short-side equity strategies fail here.
     """
-    return df.filter((pl.col("txn_code") == "P") &
+    buys = df.filter((pl.col("txn_code") == "P") &
                      (pl.col("acq_disp") == "A") &
                      pl.col("shares").is_not_null() & (pl.col("shares") > 0))
+
+    # Resolve each transaction to its EARLIEST disclosure. Form 4/A amendments
+    # re-report a trade that was already public, and the raw table keeps both
+    # rows by design -- but an event dated by the amendment would claim the
+    # market learned something it had known for a while. In this data 227
+    # open-market transaction identities appear under more than one accession,
+    # 169 of them on different filing dates, with gaps running to 1,185 days.
+    #
+    # Deduping on the transaction's identity rather than on document type also
+    # catches duplicates between two originals, and it leaves a trade that was
+    # genuinely first disclosed in an amendment dated correctly, because that
+    # amendment is then the earliest occurrence of its identity.
+    ident = ["cik", "owner_key", "txn_date", "txn_code", "shares", "price"]
+    return (buys
+            # a null reporting-owner must not collapse distinct filers together
+            .with_columns(pl.coalesce([pl.col("owner_cik"), pl.col("accn")])
+                            .alias("owner_key"))
+            .sort(["filing_date", "accepted_utc", "accn"], nulls_last=True)
+            .unique(subset=ident, keep="first")
+            .drop("owner_key")
+            .sort(["cik", "filing_date"]))
 
 
 def event_table(trigger: str, path=None) -> pl.DataFrame:
@@ -228,8 +256,12 @@ def _clusters(buys: pl.DataFrame) -> pl.DataFrame:
     a single sustained buying episode is one event rather than a run of them.
     """
     rows = []
-    per = buys.select(["cik", "filing_date", "accepted_utc", "owner_cik", "accn"]) \
-              .sort(["cik", "filing_date"])
+    per = (buys.select(["cik", "filing_date", "accepted_utc", "owner_cik", "accn"])
+               # Several insiders can file on the same day. Acceptance time is
+               # the only honest ordering; null timestamps sort last so the
+               # conservative after-close fallback completes the cluster.
+               .sort(["cik", "filing_date", "accepted_utc", "accn"],
+                     nulls_last=True))
     for key, g in per.partition_by("cik", as_dict=True).items():
         cik = key[0] if isinstance(key, tuple) else key
         dates = g["filing_date"].to_list()
@@ -242,7 +274,8 @@ def _clusters(buys: pl.DataFrame) -> pl.DataFrame:
                 continue
             lo = dates[i] - timedelta(days=CLUSTER_WINDOW_DAYS)
             distinct = {owners[j] for j in range(i + 1)
-                        if dates[j] >= lo and owners[j] is not None}
+                        if dates[j] >= lo and owners[j] is not None
+                        and (last_fire is None or dates[j] > last_fire)}
             if len(distinct) >= CLUSTER_MIN_INSIDERS:
                 rows.append({"cik": cik, "filing_date": dates[i],
                              "accepted_utc": accepted[i], "accn": accns[i]})
@@ -290,3 +323,12 @@ def build(ciks: list[str], out_path=None, *, only_quarter: str | None = None,
           f"{buys:,} open-market buys, {sells:,} sells, "
           f"{no_ts:,} without an acceptance stamp")
     return df
+
+
+def latest_available_quarter(today: date | None = None, lookback: int = 4) -> str:
+    """Newest published SEC bulk quarter, allowing for publication lag."""
+    candidates = quarters(max(START_YEAR, (today or date.today()).year - 1), today)
+    for q in reversed(candidates[-lookback:]):
+        if download_quarter(q) is not None:
+            return q
+    raise RuntimeError(f"no insider transaction quarter available in the last {lookback}")

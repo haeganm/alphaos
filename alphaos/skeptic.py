@@ -35,9 +35,20 @@ MIN_ABS_ALPHA_T = 2.0
 
 
 def _primary(results: dict) -> tuple[float, float]:
-    """(effect, t-stat) in whichever units this engine reports."""
+    """(effect, t-stat) in whichever units this engine reports.
+
+    For event studies both come from the calendar-time portfolio, never from
+    the per-event average. They must be the same series or the sign check and
+    the significance check are judging different quantities -- and they can
+    genuinely disagree: officer departures average +0.27% per event while the
+    calendar-time series runs negative, because days carrying many events are
+    not the days carrying the positive ones. The calendar-time portfolio is
+    also the thing you could actually hold (every name with a live event, each
+    day), so it is the honest basis for a verdict.
+    """
     if results.get("engine") == "event_study":
-        return results.get("mean_bhar", float("nan")), results.get("t_bhar", float("nan"))
+        return (results.get("calendar_effect", float("nan")),
+                results.get("t_bhar", float("nan")))
     return results.get("mean_net", float("nan")), results.get("t_net", float("nan"))
 
 
