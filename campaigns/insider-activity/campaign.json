@@ -1,0 +1,60 @@
+{
+  "campaign_id": "insider-activity-2026-08",
+  "family_id": "insider_buying",
+  "theme": "Open-market insider purchases predict outperformance",
+  "rationale": "Insider buying is the only signal in this repo where the informed party takes a costly, disclosed, personal position. Lakonishok and Lee, and Jeng/Metrick/Zeckhauser, document that purchases predict returns while sales do not -- the asymmetry is the point, because insiders sell for liquidity, diversification and tax reasons that have nothing to do with valuation, at roughly fourteen sales per purchase in this data. Cluster purchases, where several insiders buy independently in a short window, are the strongest form: one executive can be wrong or idiosyncratic, three simultaneously is harder to explain as noise. Every event is dated by the filing that makes it public, never by the transaction date, and the resulting drift is measured against a matched random-date placebo because this repo has already established a structural drift baseline in its event data.",
+  "hypotheses": [
+    {
+      "hypothesis": "Stocks where three or more insiders buy on the open market within thirty days outperform over the following three months",
+      "mechanism": "Insiders hold private information about their firm's prospects and buying commits their own capital against that view. Independent agreement among several insiders filters out idiosyncratic personal reasons for a single purchase. The market underreacts because Form 4s are filed individually, arrive without an announcement, and the pattern is only visible to someone aggregating across filers.",
+      "falsification": "No positive abnormal return over days +1 to +61 versus SPY, or an effect indistinguishable from the matched random-date placebo.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "insider_cluster_buy"},
+        "window": [1, 61],
+        "benchmark": "spy",
+        "predicted_sign": 1,
+        "min_events": 100
+      }
+    },
+    {
+      "hypothesis": "Any officer or director open-market purchase predicts outperformance",
+      "mechanism": "The single-insider version of the same claim. Included to establish whether clustering adds anything: if lone purchases work as well, the clustering rule is unnecessary complexity, and if only clusters work, independent agreement is doing the real filtering.",
+      "falsification": "No positive abnormal return over days +1 to +61 versus SPY.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "insider_buy_officer"},
+        "window": [1, 61],
+        "benchmark": "spy",
+        "predicted_sign": 1,
+        "min_events": 500
+      }
+    },
+    {
+      "hypothesis": "Cluster-buy outperformance is concentrated in the first month",
+      "mechanism": "If the mechanism is slow diffusion of the filing's content, most of the response should land while the information is still being absorbed. A shorter window is also less exposed to the next quarter's news contaminating the tail.",
+      "falsification": "No positive abnormal return over days +1 to +21 versus SPY.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "insider_cluster_buy"},
+        "window": [1, 21],
+        "benchmark": "spy",
+        "predicted_sign": 1,
+        "min_events": 100
+      }
+    },
+    {
+      "hypothesis": "Cluster-buy outperformance survives a sector benchmark",
+      "mechanism": "Insiders across an industry may buy at the same time for the same macro reason -- after a sector-wide selloff, say -- in which case the drift is sector mean-reversion rather than firm-specific information. Benchmarking against the sector ETF removes that explanation.",
+      "falsification": "No positive abnormal return over days +1 to +61 versus the sector ETF.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "insider_cluster_buy"},
+        "window": [1, 61],
+        "benchmark": "sector",
+        "predicted_sign": 1,
+        "min_events": 100
+      }
+    }
+  ]
+}

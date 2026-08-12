@@ -52,10 +52,15 @@ TRIGGERS = {
     "8k_2.02": "8-K item 2.02 -- results of operations (the earnings release)",
     "8k_1.01": "8-K item 1.01 -- entry into a material agreement",
     "8k_2.01": "8-K item 2.01 -- completion of an acquisition",
+    "8k_2.05": "8-K item 2.05 -- costs associated with exit or disposal (restructuring)",
+    "8k_2.06": "8-K item 2.06 -- material impairment",
     "8k_5.02": "8-K item 5.02 -- officer or director change",
     "8k_4.01": "8-K item 4.01 -- change of accountant",
     "10q_filed": "10-Q filing accepted",
     "10k_filed": "10-K filing accepted",
+    "insider_cluster_buy": "3+ distinct insiders bought on the open market within "
+                           "30 days (dated by the filing that completes the cluster)",
+    "insider_buy_officer": "an officer or director bought on the open market",
 }
 BENCHMARKS = {"spy", "sector"}
 

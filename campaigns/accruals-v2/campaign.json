@@ -1,0 +1,81 @@
+{
+  "campaign_id": "accruals-v2-2026-08",
+  "family_id": "accruals",
+  "theme": "Earnings not backed by cash flow predict underperformance (Sloan)",
+  "rationale": "Sloan (1996) showed that the accrual component of earnings is far less persistent than the cash component, and that investors fail to distinguish them: they price earnings as though a dollar of accrual were as durable as a dollar of cash. The correction arrives as the accruals reverse. This is the canonical formulation, scaled by assets, which the operational-deterioration campaign did not test -- that campaign used a difference of growth rates, which is a different and noisier construction.",
+  "disclosure": "NOT A NAIVE TEST. A growth-rate form of this mechanism ran in the operational-deterioration campaign (variant 5) and failed on raw significance (t = 1.67) and DSR (0.794), while passing sign, subperiod, costs, placebo, the high-coverage retest, and showing an FF3+MOM alpha of t = -3.44. That post-mortem's own rule requires the mechanism be re-registered in a fresh family where it must clear the bar on its own evidence rather than inherit that result's optimism. The prior exposure is recorded here so the ledger reflects the true breadth of the search, and the earlier variant is re-run inside this family so both constructions face the same trial count.",
+  "hypotheses": [
+    {
+      "hypothesis": "Firms whose earnings exceed their operating cash flow, scaled by assets, subsequently underperform",
+      "mechanism": "Accruals are the part of earnings management has discretion over. They mean-revert because they are timing differences, not economic value, but investors extrapolate total earnings. High-accrual firms are therefore systematically overpriced relative to the persistence of their earnings.",
+      "falsification": "No negative high-minus-low spread at 21 days after 10bps costs, or a spread whose sign disagrees across the two halves of the sample.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "div",
+          "a": {"op": "sub", "a": {"feature": "NetIncomeLoss"}, "b": {"feature": "OperatingCashFlow"}},
+          "b": {"feature": "Assets"}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": [],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Accruals survive sector and size neutralisation",
+      "mechanism": "Working-capital intensity is an industry characteristic and small firms have noisier accruals, so a raw sort carries both exposures. The mispricing claim requires the effect to hold within a peer group.",
+      "falsification": "No negative spread once sector and size are neutralised.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "div",
+          "a": {"op": "sub", "a": {"feature": "NetIncomeLoss"}, "b": {"feature": "OperatingCashFlow"}},
+          "b": {"feature": "Assets"}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Scaling accruals by revenue rather than assets works equally well",
+      "mechanism": "Assets are the conventional deflator but penalise asset-light firms, where a given accrual is a larger fraction of the balance sheet without being more meaningful. Revenue scaling is the natural alternative. If only one deflator works, the result is an artifact of scaling rather than an economic effect -- the lesson the inventory campaign produced when its ratio and difference forms disagreed in sign.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "div",
+          "a": {"op": "sub", "a": {"feature": "NetIncomeLoss"}, "b": {"feature": "OperatingCashFlow"}},
+          "b": {"op": "abs", "x": {"feature": "Revenues"}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "The growth-rate construction from the earlier campaign, re-registered here for comparison",
+      "mechanism": "Identical economic claim expressed as divergence between earnings growth and cash flow growth rather than as a level scaled by assets. Carried into this family so the two constructions are judged against the same trial count instead of the level form inheriting the growth form's near-miss.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "sub",
+          "a": {"op": "yoy_growth", "x": {"feature": "NetIncomeLoss"}},
+          "b": {"op": "yoy_growth", "x": {"feature": "OperatingCashFlow"}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    }
+  ]
+}

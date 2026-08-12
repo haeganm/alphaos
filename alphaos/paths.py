@@ -31,6 +31,8 @@ UNIVERSE = DATA / "universe.parquet"
 PRICES = DATA / "prices.parquet"
 FUNDAMENTALS = DATA / "fundamentals.parquet"
 EVENTS = DATA / "events.parquet"
+INSIDERS = DATA / "insiders.parquet"
+FORM4_META = DATA / "form4_meta.parquet"
 FACTORS = DATA / "factors.parquet"
 PANEL = DATA / "panel.parquet"
 EMBARGO_PANEL = EMBARGO / "panel.parquet"
@@ -42,8 +44,10 @@ NIGHTLY_LOG = DATA / "nightly.log"
 COMPANYFACTS_ZIP = CACHE / "companyfacts.zip"
 WIKI_SNAPSHOTS = CACHE / "wiki_snapshots.json"
 PRICE_CACHE = CACHE / "prices"
+INSIDER_CACHE = CACHE / "insiders"
 
 
 def ensure_dirs() -> None:
-    for d in (DATA, CACHE, EMBARGO, PRICE_CACHE, CAMPAIGNS, REGISTRY_EXPORT):
+    for d in (DATA, CACHE, EMBARGO, PRICE_CACHE, INSIDER_CACHE, CAMPAIGNS,
+              REGISTRY_EXPORT):
         os.makedirs(d, exist_ok=True)

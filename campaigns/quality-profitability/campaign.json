@@ -1,0 +1,83 @@
+{
+  "campaign_id": "quality-profitability-2026-08",
+  "family_id": "profitability",
+  "theme": "Gross profitability predicts cross-sectional returns (Novy-Marx)",
+  "rationale": "Novy-Marx (2013) showed gross profits scaled by assets is about as powerful as book-to-market, and that it works because gross profit is the cleanest measure of true economic profitability: the further down the income statement you go, the more the number is polluted by accounting choices and by expenses that are actually investments (R&D, advertising). Profitable firms are systematically cheaper than they look on earnings, so a value investor who ignores quality buys unprofitable firms. This is one of the most replicated non-price anomalies in the literature, which is exactly why it is worth running first: if it shows nothing at all in this panel, that is evidence about the panel as much as about the market, and I need to know that before trusting any novel negative result from the same data.",
+  "hypotheses": [
+    {
+      "hypothesis": "Firms with higher gross profits scaled by assets outperform",
+      "mechanism": "Gross profit (revenue minus cost of goods sold) is the income statement line least contaminated by accounting discretion and by expensed investment. High gross profitability identifies firms with genuine economic advantage that the market underprices because it anchors on bottom-line earnings, which are noisier.",
+      "falsification": "No positive high-minus-low spread at 21 days after 10bps costs, or a spread whose sign disagrees across the two halves of the sample.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "div",
+          "a": {"op": "sub", "a": {"feature": "Revenues"}, "b": {"feature": "CostOfRevenue"}},
+          "b": {"feature": "Assets"}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": [],
+        "cost_bps": 10,
+        "predicted_sign": 1
+      }
+    },
+    {
+      "hypothesis": "Gross profitability survives sector and size neutralisation",
+      "mechanism": "Gross margins differ enormously by industry, so a raw sort risks being a bet on software over retail rather than on profitability within a peer group. If the effect is real it should persist after removing sector and size exposure; if it vanishes, the signal was an industry tilt.",
+      "falsification": "No positive spread once sector and size are neutralised.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "div",
+          "a": {"op": "sub", "a": {"feature": "Revenues"}, "b": {"feature": "CostOfRevenue"}},
+          "b": {"feature": "Assets"}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": 1
+      }
+    },
+    {
+      "hypothesis": "Operating profitability predicts returns as well as gross profitability",
+      "mechanism": "Fama and French's 2015 five-factor model uses operating profitability rather than gross. It is further down the income statement and so more exposed to accounting choice, but it nets out selling and administrative costs that gross profit ignores. Including both distinguishes 'profitability matters' from 'this particular definition matters'.",
+      "falsification": "No positive spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "div",
+          "a": {"feature": "OperatingIncomeLoss"},
+          "b": {"feature": "Assets"}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": 1
+      }
+    },
+    {
+      "hypothesis": "Improving gross profitability predicts returns better than its level",
+      "mechanism": "A level signal is largely a stable firm characteristic and turns over slowly; the market has had decades to price it. Change in profitability is news. If the level works and the change does not, the effect is a risk premium rather than mispricing.",
+      "falsification": "No positive spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "yoy_growth",
+          "x": {
+            "op": "div",
+            "a": {"op": "sub", "a": {"feature": "Revenues"}, "b": {"feature": "CostOfRevenue"}},
+            "b": {"feature": "Assets"}
+          }
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": 1
+      }
+    }
+  ]
+}

@@ -25,6 +25,11 @@ from .. import paths
 SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik}.json"
 ASOF_DB = r"C:\AsOf\data\asof.db"
 FORMS = {"8-K", "8-K/A", "10-K", "10-Q"}
+# Form 4 metadata is fetched into its own archive rather than widened into
+# FORMS: the shrink guard in build() compares a refresh against the existing
+# file, and mixing form families into one archive would make that comparison
+# meaningless the first time the set changed.
+FORM4 = {"4", "4/A"}
 
 # A refresh may not shrink the archive by more than this. See build().
 MAX_SHRINK = 0.20
@@ -36,9 +41,8 @@ _RAW_SCHEMA = {
 }
 
 
-def _rows_from_block(cik: str, block: dict) -> list[tuple]:
-    cols = ("accessionNumber", "filingDate", "reportDate", "acceptanceDateTime",
-            "form", "items")
+def _rows_from_block(cik: str, block: dict, forms: set[str] | None = None) -> list[tuple]:
+    forms = forms or FORMS
     if not all(c in block for c in ("accessionNumber", "form", "filingDate")):
         return []
     n = len(block["accessionNumber"])
@@ -46,7 +50,7 @@ def _rows_from_block(cik: str, block: dict) -> list[tuple]:
     out = []
     for i in range(n):
         form = get("form", i)
-        if form not in FORMS:
+        if form not in forms:
             continue
         out.append((
             cik, form, get("items", i) or "",
@@ -56,7 +60,8 @@ def _rows_from_block(cik: str, block: dict) -> list[tuple]:
     return out
 
 
-def fetch_filings(cik: str, *, recent_only: bool = False) -> list[tuple]:
+def fetch_filings(cik: str, *, recent_only: bool = False,
+                  forms: set[str] | None = None) -> list[tuple]:
     """8-K/10-K/10-Q filings for one CIK.
 
     filings.recent holds only the last ~1000 documents; anything older lives in
@@ -68,7 +73,7 @@ def fetch_filings(cik: str, *, recent_only: bool = False) -> list[tuple]:
     """
     cik = cik.zfill(10)
     doc = http.get_json(SUBMISSIONS.format(cik=cik))
-    rows = _rows_from_block(cik, doc.get("filings", {}).get("recent", {}))
+    rows = _rows_from_block(cik, doc.get("filings", {}).get("recent", {}), forms)
     if recent_only:
         return rows
     for extra in doc.get("filings", {}).get("files", []):
@@ -76,7 +81,7 @@ def fetch_filings(cik: str, *, recent_only: bool = False) -> list[tuple]:
         if not name:
             continue
         rows.extend(_rows_from_block(
-            cik, http.get_json(f"https://data.sec.gov/submissions/{name}")))
+            cik, http.get_json(f"https://data.sec.gov/submissions/{name}"), forms))
     return rows
 
 
@@ -91,7 +96,8 @@ def _normalize(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def build(ciks: list[str], out_path=paths.EVENTS, *,
-          recent_only: bool = False, merge: bool = False) -> pl.DataFrame:
+          recent_only: bool = False, merge: bool = False,
+          forms: set[str] | None = None) -> pl.DataFrame:
     """Fetch filing metadata and write the archive.
 
     Guarded against the failure that matters: every per-CIK error is swallowed
@@ -109,7 +115,7 @@ def build(ciks: list[str], out_path=paths.EVENTS, *,
     failed = 0
     for i, cik in enumerate(wanted, 1):
         try:
-            rows.extend(fetch_filings(cik, recent_only=recent_only))
+            rows.extend(fetch_filings(cik, recent_only=recent_only, forms=forms))
         except Exception as exc:                       # noqa: BLE001
             failed += 1
             if failed <= 5:

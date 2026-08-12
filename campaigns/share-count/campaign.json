@@ -1,0 +1,76 @@
+{
+  "campaign_id": "share-count-2026-08",
+  "family_id": "net_issuance",
+  "theme": "Net share issuance predicts underperformance; buybacks predict outperformance",
+  "rationale": "Managers know more about their own firm's value than the market does, and share count is where that knowledge becomes an action rather than a statement. Issuing equity when you believe the stock is cheap destroys value for existing holders, so rational managers issue high and repurchase low. Daniel and Titman, and Pontiff and Woodgate, document that the resulting share-count change predicts returns better than most valuation ratios. The mechanism is distinct from asset growth even though the two correlate: a firm can grow assets with debt or retained earnings without issuing a share, and a firm can issue shares purely to fund compensation.",
+  "hypotheses": [
+    {
+      "hypothesis": "Firms increasing their share count fastest subsequently underperform",
+      "mechanism": "Net issuance is a costly signal in the economic sense: management chooses to sell equity, which is rational only if they consider the stock fairly valued or expensive. Dilution compounds the effect mechanically. The market underreacts because share-count changes are buried in the filings rather than announced.",
+      "falsification": "No negative high-minus-low spread at 21 days after 10bps costs, or a spread whose sign disagrees across the two halves of the sample.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {"op": "yoy_growth", "x": {"feature": "SharesOutstanding"}},
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": [],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Net issuance survives sector and size neutralisation",
+      "mechanism": "Small firms and capital-hungry sectors issue more. If the signal is really about managerial information rather than about who needs capital, it should survive removing those exposures.",
+      "falsification": "No negative spread once sector and size are neutralised.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {"op": "yoy_growth", "x": {"feature": "SharesOutstanding"}},
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Share-count change measured over two years predicts better than one",
+      "mechanism": "A single year of issuance is noisy: it catches one-off acquisitions and option exercises alongside deliberate capital-raising. A longer window isolates sustained policy, which is what actually reflects management's standing view of valuation.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "div",
+          "a": {
+            "op": "sub",
+            "a": {"feature": "SharesOutstanding"},
+            "b": {"feature": "SharesOutstanding", "lag": 7}
+          },
+          "b": {"op": "abs", "x": {"feature": "SharesOutstanding", "lag": 7}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Issuance is distinct from asset growth, not a proxy for it",
+      "mechanism": "The two signals correlate because both rise when a firm expands. Subtracting asset growth isolates the part of issuance that is pure equity financing choice rather than balance-sheet expansion. If only the combined form works, the mechanism is investment, not signalling, and this family should defer to asset_growth.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "sub",
+          "a": {"op": "yoy_growth", "x": {"feature": "SharesOutstanding"}},
+          "b": {"op": "yoy_growth", "x": {"feature": "Assets"}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    }
+  ]
+}

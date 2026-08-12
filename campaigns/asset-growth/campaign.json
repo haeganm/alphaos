@@ -1,0 +1,68 @@
+{
+  "campaign_id": "asset-growth-2026-08",
+  "family_id": "asset_growth",
+  "theme": "Firms that grow their asset base fastest subsequently underperform",
+  "rationale": "Cooper, Gulen and Schill (2008) found total asset growth to be one of the strongest predictors of the cross-section of returns, and unusually it works across size buckets. Two mechanisms compete: empire-building (managers over-invest at the top of their cycle because compensation and prestige scale with size) and over-extrapolation (investors project recent growth forward and overpay). Both predict the same sign, which is why this campaign cannot distinguish them and does not claim to. This is a replication: the point is to establish whether a well-documented fundamentals anomaly is detectable in this panel at all.",
+  "hypotheses": [
+    {
+      "hypothesis": "Firms with the highest year-on-year total asset growth subsequently underperform",
+      "mechanism": "Rapid balance-sheet expansion marks the peak of an investment cycle. Managers over-invest when capital is cheap and their own recent performance is strong, and investors extrapolate that growth rather than discounting the declining marginal return on it. The correction shows up as underperformance over the following months.",
+      "falsification": "No negative high-minus-low spread at 21 days after 10bps costs, or a spread whose sign disagrees across the two halves of the sample.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {"op": "yoy_growth", "x": {"feature": "Assets"}},
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": [],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Asset growth survives sector and size neutralisation",
+      "mechanism": "Asset growth rates differ structurally across industries and small firms grow faster than large ones, so a raw sort is partly a size and sector bet. A real effect should survive removing both.",
+      "falsification": "No negative spread once sector and size are neutralised.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {"op": "yoy_growth", "x": {"feature": "Assets"}},
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "Assets growing faster than revenue is the sharper form of the signal",
+      "mechanism": "Asset growth matched by revenue growth is a firm scaling a working business; asset growth that outruns revenue is capital going in without sales coming out. If the mechanism is over-investment rather than mere extrapolation, conditioning on revenue should strengthen it.",
+      "falsification": "No negative spread at 21 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {
+          "op": "sub",
+          "a": {"op": "yoy_growth", "x": {"feature": "Assets"}},
+          "b": {"op": "yoy_growth", "x": {"feature": "Revenues"}}
+        },
+        "rebalance": "monthly",
+        "horizon_days": 21,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    },
+    {
+      "hypothesis": "The effect is stronger at a quarterly horizon than a monthly one",
+      "mechanism": "Balance sheets update quarterly, so a monthly rebalance re-ranks on stale information for two months out of three and pays turnover for the privilege. If the underlying effect is real, matching the holding period to the data frequency should show it more cleanly.",
+      "falsification": "No negative spread at 63 days after costs.",
+      "spec": {
+        "type": "cross_sectional",
+        "signal": {"op": "yoy_growth", "x": {"feature": "Assets"}},
+        "rebalance": "quarterly",
+        "horizon_days": 63,
+        "neutralize": ["sector", "size"],
+        "cost_bps": 10,
+        "predicted_sign": -1
+      }
+    }
+  ]
+}

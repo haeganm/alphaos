@@ -1,0 +1,73 @@
+{
+  "campaign_id": "governance-events-2026-08",
+  "family_id": "governance_events",
+  "theme": "Bad-news 8-K disclosures are underreacted to and drift",
+  "rationale": "Earnings releases are the most watched disclosure in the market, and the PEAD campaign confirmed there is nothing left in them for S&P 500 names. The interesting question is whether the same is true of disclosures nobody schedules a call around. Restructuring charges, impairments, auditor changes and officer departures arrive without an analyst consensus attached, are unstructured text rather than a number, and are far rarer than earnings. If slow information diffusion survives anywhere in large caps, it should be in the disclosures that are hard to parse rather than merely tabular -- which is precisely the direction the operational-deterioration post-mortem pointed to. Every event here is benchmarked against a matched random-date placebo, because that campaign also established a structural positive drift baseline in this event data.",
+  "hypotheses": [
+    {
+      "hypothesis": "Officer and director departures are followed by underperformance",
+      "mechanism": "Item 5.02 filings that are not bundled with earnings are governance news in isolation. Senior departures signal either internal problems the market cannot yet see or the loss of firm-specific human capital, and the disruption cost is realised over the following weeks rather than at the announcement.",
+      "falsification": "No negative abnormal return over days +1 to +61 versus SPY, or an effect indistinguishable from the matched random-date placebo.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_5.02"},
+        "window": [1, 61],
+        "benchmark": "spy",
+        "predicted_sign": -1,
+        "min_events": 1000
+      }
+    },
+    {
+      "hypothesis": "Restructuring charges are followed by underperformance",
+      "mechanism": "Item 2.05 announces costs associated with exit or disposal activities. Management frames restructuring as decisive action, and the market tends to reward the narrative on the day; the charge itself is an admission that prior capital allocation failed, and the operational damage plays out over months.",
+      "falsification": "No negative abnormal return over days +1 to +61 versus SPY.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_2.05"},
+        "window": [1, 61],
+        "benchmark": "spy",
+        "predicted_sign": -1,
+        "min_events": 150
+      }
+    },
+    {
+      "hypothesis": "Material impairments are followed by underperformance",
+      "mechanism": "Item 2.06 is a write-down: an accounting acknowledgement that assets on the balance sheet are worth less than carried. It is backward-looking by construction, so the efficient response is no response -- but if investors treat the write-down as clearing the decks, they will underweight what the impairment implies about the remaining asset base.",
+      "falsification": "No negative abnormal return over days +1 to +61 versus SPY.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_2.06"},
+        "window": [1, 61],
+        "benchmark": "spy",
+        "predicted_sign": -1,
+        "min_events": 100
+      }
+    },
+    {
+      "hypothesis": "Auditor changes are followed by underperformance",
+      "mechanism": "Item 4.01 is the rarest disclosure in this family and the most asymmetric: firms almost never change auditor for good reasons, and a dismissal following a disagreement is a serious governance signal. Rarity is the point -- an event this uncommon is unlikely to be systematically monitored.",
+      "falsification": "No negative abnormal return over days +1 to +61 versus SPY, or too few events to judge.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_4.01"},
+        "window": [1, 61],
+        "benchmark": "spy",
+        "predicted_sign": -1,
+        "min_events": 50
+      }
+    },
+    {
+      "hypothesis": "Departure-driven underperformance is sector-relative, not market-relative",
+      "mechanism": "A market benchmark leaves sector exposure in the abnormal return, so drift after departures could be sector rotation during a period when many firms in a struggling industry lose executives at once. Benchmarking against the sector ETF removes that explanation.",
+      "falsification": "No negative abnormal return over days +1 to +61 versus the sector ETF.",
+      "spec": {
+        "type": "event_study",
+        "event": {"trigger": "8k_5.02"},
+        "window": [1, 61],
+        "benchmark": "sector",
+        "predicted_sign": -1,
+        "min_events": 1000
+      }
+    }
+  ]
+}

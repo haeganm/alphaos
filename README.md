@@ -39,6 +39,12 @@ these numbers mean something.
   target's history spans the old name's membership so bankruptcies are not
   spliced.
 - **Events** — 297k filings (219k 8-Ks) with EDGAR acceptance timestamps.
+- **Insiders** — 1.32M Form 4 transactions, 753 issuers, 2009→present, from
+  SEC's quarterly bulk data sets (~64 zips rather than the 500k-700k
+  per-filing requests the naive route needs). Every transaction code,
+  ownership type and reporting-owner role, with acceptance timestamps joined
+  from the submissions API at 100% coverage — so an event is dated by when the
+  filing became public, never by when the trade happened.
 - **Factors** — Fama-French 3 + momentum, daily.
 
 ## Verified, not asserted
@@ -61,19 +67,44 @@ these numbers mean something.
 
 ## Findings so far
 
-Two campaigns, nine pre-registered hypotheses, **zero survivors** — the
-expected base rate, and the reason the ledger exists.
+**Eight campaigns, 33 pre-registered hypotheses, zero survivors.** That is the
+expected base rate for one person mining public data, and the reason the ledger
+exists. The asset being built is the map of where the edge is not.
 
-- `campaigns/operational-deterioration/` — inventory, receivables and accrual
-  deterioration. Effects near 5bp/month against 40x that in monthly vol; the
-  ratio and difference forms of the same idea produced opposite signs.
-- `campaigns/earnings-reaction-drift/` — PEAD in large caps. The closest thing
-  to a candidate: one-month drift after a strong earnings reaction passes sign,
-  significance (t = 2.79), the bootstrap interval, concentration, breadth,
-  subperiod agreement and the placebo, and fails only the deflated Sharpe
-  (0.78 against a 0.95 floor) given four trials in the family.
-- `campaigns/_prior-projects/` — mechanisms retired by TechnicalEngine, BTCTA,
-  MYOWNTA and Density Desk. All four found no edge; that is the prior.
+| Family | N | Best result | Died on |
+|---|--:|---|---|
+| `accruals` | 4 | **−0.434%/mo, t = 2.49, FF4 alpha t = −3.19** | **DSR alone (0.887 vs 0.95)** |
+| `pead` | 4 | +0.29%/60d, t = 2.79, clean placebo | DSR (0.856) |
+| `profitability` | 4 | +0.376%/mo, t = 1.07, HML −0.44 | significance, alpha, DSR |
+| `net_issuance` | 4 | −0.419%/mo, t = 1.40 | significance, alpha, DSR |
+| `asset_growth` | 4 | −0.291%/mo, t = 0.92 | significance, DSR |
+| `operational_deterioration` | 5 | −0.339%/mo, t = 1.67, alpha t = −3.44 | significance, DSR |
+| `governance_events` | 5 | +0.274%/61d, t = 2.06 | **wrong sign** |
+| `insider_buying` | 4 | +0.358%/61d, t = 1.34 | **placebo t = 3.13** |
+
+Three patterns worth more than any single verdict:
+
+**The universe is the binding constraint, not the mechanisms.** Rare-disclosure
+events (impairments, auditor changes) and insider cluster buys both failed for
+the same structural reason: 500 large caps do not generate enough of them.
+Asset growth collapsed sixfold under size/sector neutralisation because the S&P
+500 has no small-cap tail for it to work in.
+
+**The placebo earns its keep repeatedly.** It killed a t = 3.94 earnings-drift
+result and a t = 1.34 insider result by showing that random-date events drift
+just as much. Any event study in this repo must be read against it, never
+against the benchmark alone.
+
+**Accruals is the standing candidate.** It passed every check except the
+multiple-testing hurdle, with a factor-model R² of 0.067 — almost none of it is
+factor exposure. Had it been registered alone it would have survived; testing
+three sibling variants correctly raised its bar. It needs out-of-sample time,
+not more variants. See `campaigns/accruals-v2/postmortem.md` for the full
+argument, including why the floor will not be relaxed to let it through.
+
+`campaigns/_prior-projects/` records the mechanisms retired by TechnicalEngine,
+BTCTA, MYOWNTA and Density Desk. All four found no edge; that is the prior this
+lab was calibrated against, and eight campaigns later it still holds.
 
 Both post-mortems carry a revision note from the 2026-08-11 hardening pass.
 Three harness bugs changed the numbers — most importantly, event t-statistics

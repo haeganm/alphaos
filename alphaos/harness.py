@@ -470,7 +470,14 @@ def run_event_study(spec: dict, *, events_path=paths.EVENTS,
     trig = s["event"]["trigger"]
     lag = s["lag_days"]
 
-    ev = pl.read_parquet(events_path)
+    if trig.startswith("insider_"):
+        # Insider events are derived from Form 4 transactions rather than the
+        # 8-K archive, but arrive shaped identically so nothing downstream
+        # changes -- including the acceptance-time entry rule.
+        from .ingest import insiders as insiders_mod
+        ev = insiders_mod.event_table(trig)
+    else:
+        ev = pl.read_parquet(events_path)
     if trig.startswith("8k_"):
         ev = ev.filter(pl.col("form").str.starts_with("8-K") &
                        pl.col("items").str.contains(trig.split("_", 1)[1], literal=True))

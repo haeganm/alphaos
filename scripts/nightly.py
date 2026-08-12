@@ -35,7 +35,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from backup_registry import export as export_registry  # noqa: E402
 from alphaos import conviction, harness, panel, paths, registry as R  # noqa: E402
 from alphaos import spec as spec_mod, stats  # noqa: E402
-from alphaos.ingest import events, prices, universe  # noqa: E402
+from alphaos.ingest import events, insiders, prices, universe  # noqa: E402
 
 DEMOTE_AFTER_DAYS = 180
 MIN_FORWARD_PERIODS = 3
@@ -63,6 +63,14 @@ def refresh_data() -> str:
     # change, and re-fetching it nightly cost ~1,900 throttled requests to gain
     # a handful of rows. events.build refuses to shrink the archive.
     events.build(ciks, recent_only=True, merge=True)
+
+    # Form 4 acceptance stamps, then the current quarter's insider data set
+    # only -- earlier quarters are closed and cannot change.
+    log("topping up Form 4 acceptance stamps and the current insider quarter")
+    events.build(ciks, out_path=paths.FORM4_META, forms=events.FORM4,
+                 recent_only=True, merge=True)
+    today = date.today()
+    insiders.build(ciks, only_quarter=f"{today.year}q{(today.month - 1) // 3 + 1}")
 
     meta = panel.build()
     log(f"panel rebuilt, data_version={meta['data_version']}")

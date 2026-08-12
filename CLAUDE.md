@@ -94,6 +94,26 @@ trial and accept the higher hurdle it creates for the whole family.
 decayed). Vault entries are demoted automatically by `scripts/nightly.py`
 after 180 days of non-positive forward returns.
 
+## What eight campaigns established (read before proposing more)
+
+- **The universe is the binding constraint on several whole classes of
+  mechanism.** Rare disclosures (impairments, auditor changes) and insider
+  cluster buys both failed for lack of events, not lack of effect; asset growth
+  collapsed under size/sector neutralisation because there is no small-cap tail
+  here. Before proposing a mechanism, ask whether 500 large caps can generate
+  enough of it. If the honest answer is no, say so instead of testing it.
+- **Every event study must be read against its matched random-date placebo.**
+  This data has a structural positive drift baseline. The placebo has now
+  killed two results that the benchmark alone would have blessed (t = 3.94 and
+  t = 1.34).
+- **Sibling variants are expensive.** The accruals mechanism passed every check
+  except the DSR, and would have survived had it been registered alone. Testing
+  four variants of one idea is the correct thing to do *and* it raises the bar
+  for all of them. Register the variants you genuinely need, not the ones you
+  could imagine.
+- **Do not carve a family to reset N, and do not relax a threshold to admit a
+  favourite.** Both are visible in the ledger.
+
 ## Known limitations to respect
 
 - **Survivorship residual.** Price coverage of historical index members runs

@@ -16,7 +16,8 @@ import polars as pl
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from alphaos import panel, paths  # noqa: E402
-from alphaos.ingest import edgar, events, factors, prices, universe  # noqa: E402
+from alphaos.ingest import (edgar, events, factors, insiders, prices,  # noqa: E402
+                            universe)
 
 
 def main(argv: list[str]) -> int:
@@ -43,12 +44,19 @@ def main(argv: list[str]) -> int:
     ciks = uni.filter(pl.col("cik").is_not_null())["cik"].unique().to_list()
     edgar.build(ciks)
 
-    print("\n== 5/6 filing events + Fama-French factors ==")
+    print("\n== 5/7 filing events + Fama-French factors ==")
     if not skip_events:
         events.build(ciks)
     factors.build()
 
-    print("\n== 6/6 panel + embargo split ==")
+    print("\n== 6/7 insider transactions (Form 4) ==")
+    if not skip_events:
+        # Acceptance timestamps first: the quarterly data sets carry a filing
+        # date but no clock, and an event study needs the clock.
+        events.build(ciks, out_path=paths.FORM4_META, forms=events.FORM4)
+    insiders.build(ciks)
+
+    print("\n== 7/7 panel + embargo split ==")
     meta = panel.build()
     print(f"\ndata_version = {meta['data_version']}")
     print("Now run: python -c \"from alphaos import controls; "
