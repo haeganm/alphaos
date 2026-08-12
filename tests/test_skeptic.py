@@ -153,3 +153,27 @@ def test_skeptic_reruns_do_not_raise_the_hurdle(reg):
         reg.record_result(e, {}, sharpe=float(i))     # wild noise
     assert reg.family_sharpe_variance("fam") == pytest.approx(baseline)
     assert reg.family_trial_count("fam") == 6
+
+
+def test_rerunning_a_campaign_does_not_soften_the_dsr_hurdle(reg):
+    """The ledger is append-only, so re-running a campaign leaves several rows
+    per spec. Counting each as another draw shrinks the variance toward the
+    repeated values and LOWERS the hurdle -- the dangerous direction for a
+    check whose job is to be hard to pass."""
+    sharpes = [0.05, 0.15, 0.25, 0.35]
+    for s in sharpes:
+        e = reg.register(campaign_id="c", family_id="fam", hypothesis="h",
+                         predicted_sign=1, falsification="f",
+                         spec={"v": s}, data_version="dv")
+        reg.record_result(e, {}, sharpe=s)
+    once = reg.family_sharpe_variance("fam")
+
+    for _ in range(4):                       # four more identical re-runs
+        for s in sharpes:
+            e = reg.register(campaign_id="c", family_id="fam", hypothesis="h",
+                             predicted_sign=1, falsification="f",
+                             spec={"v": s}, data_version="dv")
+            reg.record_result(e, {}, sharpe=s)
+
+    assert reg.family_trial_count("fam") == 4
+    assert reg.family_sharpe_variance("fam") == pytest.approx(once)

@@ -195,6 +195,15 @@ class Registry:
         self._event(exp_id, "abandon", {"reason": reason})
         return True
 
+    def note(self, exp_id: str, event: str, payload: dict):
+        """Append an audit entry without touching the experiment row.
+
+        For facts that belong in the record but must not reach a disclosure
+        surface -- the holdout's verdict reason, for instance, is deliberately
+        free of numbers so it cannot leak anything about the result.
+        """
+        self._event(exp_id, event, payload)
+
     def record_holdout_touch(self, exp_id: str) -> int:
         self.con.execute(
             "update experiments set holdout_touches = holdout_touches + 1 where id=?", [exp_id])
@@ -243,11 +252,27 @@ class Registry:
         constructed noise dominated the pool. Measured on the live ledger that
         inflated the variance by 52% (0.0117 vs 0.0077), raising the hurdle for
         every genuine trial in the family.
+
+        One Sharpe per DISTINCT spec, matching family_trial_count exactly.
+        Re-running a campaign appends new rows for the same specs -- the ledger
+        is append-only, so that history is kept on purpose -- but counting each
+        re-run as another draw shrinks the variance toward the repeated values
+        and therefore LOWERS the hurdle. Measured on this ledger, `pead` had 20
+        rows for 4 specs and a variance 23% below the correct one, making the
+        DSR more permissive than it should be. That is the dangerous direction
+        for a check whose whole job is to be hard to pass.
+
+        The latest run of each spec wins, since it reflects current code and
+        data.
         """
         row = self.con.execute(
-            "select var_samp(sharpe) from experiments "
-            "where family_id=? and trial_kind <> 'skeptic' "
-            "and sharpe is not null and isfinite(sharpe)",
+            "select var_samp(sharpe) from ("
+            "  select distinct on (spec_hash) spec_hash, sharpe"
+            "  from experiments"
+            "  where family_id=? and trial_kind <> 'skeptic'"
+            "    and sharpe is not null and isfinite(sharpe)"
+            "  order by spec_hash, registered_at desc"
+            ")",
             [family_id]).fetchone()
         return float(row[0]) if row and row[0] is not None else float("nan")
 

@@ -102,6 +102,30 @@ def test_query_discloses_a_verdict_and_nothing_else(reg, monkeypatch):
     assert reg.get(e)["verdict"] == R.VAULT
 
 
+def test_event_gate_judges_the_same_statistic_discovery_judged(reg, monkeypatch):
+    """For event studies the per-event average and the calendar-time effect can
+    disagree in sign. If the gate read the per-event number while discovery
+    read the calendar one, a spec could pass discovery and be rejected at the
+    embargo on a different quantity entirely."""
+    ev_spec = {"type": "event_study", "event": {"trigger": "8k_2.02"},
+               "window": [1, 61], "predicted_sign": 1, "min_events": 30}
+    e = reg.register(campaign_id="c", family_id="ev", hypothesis="h",
+                     predicted_sign=1, falsification="f", spec=ev_spec,
+                     data_version="dv1")
+    reg.record_result(e, {"mean_bhar": 0.01}, sharpe=0.2)
+    reg.record_verdict(e, R.SURVIVED_DISCOVERY, "battery")
+
+    # per-event average positive, calendar-time effect negative
+    monkeypatch.setattr(holdout.harness, "run_event_study",
+                        lambda spec, **k: {"engine": "event_study",
+                                           "mean_bhar": +0.02,
+                                           "calendar_effect": -0.02,
+                                           "returns_signed": [-0.001] * 60})
+    out = holdout.query(e, reg=reg)
+    assert out["passed"] is False, "must follow the calendar-time effect, not mean_bhar"
+    assert reg.get(e)["verdict"] == R.FAILED
+
+
 def test_a_failing_candidate_is_marked_failed_without_disclosing_why(reg, monkeypatch):
     e = _candidate(reg)
     monkeypatch.setattr(holdout.harness, "load_wide", lambda **k: "panel")

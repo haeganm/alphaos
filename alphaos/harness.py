@@ -719,5 +719,24 @@ def run(spec: dict, *, wide: pl.DataFrame | None = None, embargo: bool = False,
         if wide is None:
             wide = load_wide(embargo=embargo, all_data=all_data,
                              lag_days=s["lag_days"])
-        return run_cross_sectional(s, wide)
-    return run_event_study(s, embargo=embargo, all_data=all_data)
+        res = run_cross_sectional(s, wide)
+    else:
+        res = run_event_study(s, embargo=embargo, all_data=all_data)
+    return stamp_data_version(res)
+
+
+def stamp_data_version(results: dict) -> dict:
+    """Record which build produced these numbers.
+
+    data_version was captured at registration and then never checked against
+    anything, so a spec could be registered on one build and graded on another
+    with nothing noticing -- which is exactly what happens on every embargo
+    query and every night of forward grading. Stamping the result makes the
+    drift visible instead of silent; callers that care (holdout.query,
+    nightly.forward_grade) compare it against the registered value.
+    """
+    try:
+        results["graded_on_data_version"] = panel_mod.current_version()
+    except Exception:                                # noqa: BLE001
+        results["graded_on_data_version"] = "unknown"
+    return results

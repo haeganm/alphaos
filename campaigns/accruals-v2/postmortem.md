@@ -16,6 +16,15 @@
 | 3 | scaled by revenue | +0.049% | 0.23 | — | 0.060 | sign, significance, DSR |
 | 4 | growth-rate form (from v1) | −0.339% | 1.67 | −3.44 | 0.747 | significance, DSR |
 
+> **Note 2026-08-12.** A later audit found that the DSR variance pool was
+> counting every re-run of a spec as another draw, which for campaigns run more
+> than once mixed results computed under different code versions. It now takes
+> the latest run per distinct spec. **This family is unaffected** — it has been
+> run exactly once, four rows for four specs — so the 0.887 below is unchanged.
+> The event-study families, which were re-run after the calendar-time
+> correction, did shift; all remain far below the floor and all fail on other
+> checks as well, so no verdict moves.
+
 ## The result that matters
 
 Variant 1 — canonical Sloan accruals, scaled by assets — passed **every fatal

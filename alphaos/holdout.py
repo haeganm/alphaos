@@ -23,7 +23,7 @@ import json
 
 import numpy as np
 
-from . import harness, registry as R, spec as spec_mod, stats
+from . import harness, registry as R, skeptic, spec as spec_mod, stats
 
 MAX_FAMILY_TOUCHES = 3
 
@@ -63,11 +63,24 @@ def query(exp_id: str, *, reg: R.Registry) -> dict:
     if spec["type"] == "cross_sectional":
         wide = harness.load_wide(embargo=True, lag_days=spec["lag_days"])
         res = harness.run_cross_sectional(spec, wide)
-        effect = res.get("mean_net", float("nan"))
     else:
         res = harness.run_event_study(spec, embargo=True)
-        effect = res.get("mean_bhar", float("nan"))
+
+    # The gate must judge the SAME quantity discovery judged. Reading the
+    # per-event average here while the interval came from the calendar-time
+    # series would let a spec pass discovery on one statistic and be promoted
+    # or rejected on another -- and for event studies those two can disagree in
+    # sign. One definition, shared with the skeptic.
+    effect, _t = skeptic.primary_statistic(res)
     series = res.get("returns_signed", [])
+
+    # An embargo query happens long after registration, so the build underneath
+    # may have moved. That does not invalidate the query -- the embargo slice is
+    # meant to be evaluated later -- but a silent change of evidence is exactly
+    # the thing this repo refuses to allow, so it is recorded on the verdict.
+    harness.stamp_data_version(res)
+    graded_on = res.get("graded_on_data_version", "unknown")
+    drifted = graded_on != row["data_version"]
 
     lo, hi = stats.block_bootstrap_mean_ci(np.asarray(series, dtype=float))
     passed = bool(
@@ -76,6 +89,12 @@ def query(exp_id: str, *, reg: R.Registry) -> dict:
         and np.isfinite(lo) and np.isfinite(hi)
         and lo > 0                      # signed series: positive means it worked
     )
+    # Into the audit trail, not the verdict reason: that string is kept free of
+    # numbers so it cannot leak anything about the result, and a build hash is
+    # still a number to anyone reading it.
+    if drifted:
+        reg.note(exp_id, "holdout_data_version_drift",
+                 {"registered_on": row["data_version"], "graded_on": graded_on})
     reg.record_verdict(
         exp_id, R.VAULT if passed else R.FAILED,
         "passed embargo" if passed else "failed embargo (no statistics disclosed)")

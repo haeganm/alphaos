@@ -119,6 +119,11 @@ after 180 days of non-positive forward returns.
   could imagine.
 - **Do not carve a family to reset N, and do not relax a threshold to admit a
   favourite.** Both are visible in the ledger.
+- **Re-running a campaign is safe, and the ledger keeps every run.** The DSR
+  variance takes the latest run per distinct spec, so repeated runs neither
+  soften nor harden the hurdle. Before that fix the pool mixed results computed
+  under different code versions for the same spec, which is variance across
+  releases rather than across trials.
 
 ## Known limitations to respect
 

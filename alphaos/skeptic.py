@@ -34,7 +34,7 @@ MIN_NEUTRALIZER_COVERAGE = 0.5  # a requested neutraliser must have real data
 MIN_ABS_ALPHA_T = 2.0
 
 
-def _primary(results: dict) -> tuple[float, float]:
+def primary_statistic(results: dict) -> tuple[float, float]:
     """(effect, t-stat) in whichever units this engine reports.
 
     For event studies both come from the calendar-time portfolio, never from
@@ -84,7 +84,7 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
         return {"verdict": R.FAILED, "reason": f"harness: {results['error']}",
                 "checks": [_check("harness", False, results["error"])], "dsr": None}
 
-    effect, tstat = _primary(results)
+    effect, tstat = primary_statistic(results)
     is_event = results.get("engine") == "event_study"
 
     # 1. sign -- binding, and checked before anything else
@@ -177,7 +177,7 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
         double = dict(s)
         double["cost_bps"] = s["cost_bps"] * 2
         r2 = harness.run_cross_sectional(double, wide)
-        e2, _ = _primary(r2)
+        e2, _ = primary_statistic(r2)
         checks.append(_check("cost_x2", np.isfinite(e2) and np.sign(e2) == predicted,
                              f"effect at {double['cost_bps']}bps: {e2:+.5f}"))
         child_specs.append(("skeptic:cost_x2", double, r2))
@@ -193,14 +193,14 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
         high = dict(s)
         high["start"] = "2016-01-01"
         r3 = harness.run_cross_sectional(high, wide)
-        e3, _ = _primary(r3)
+        e3, _ = primary_statistic(r3)
         checks.append(_check(
             "high_coverage_period", np.isfinite(e3) and np.sign(e3) == predicted,
             f"2016+ (where price coverage exceeds 85%): {e3:+.5f}"))
         child_specs.append(("skeptic:high_coverage", high, r3))
     else:
         placebo = harness.run_event_study(s, shuffle_seed=1234)
-        _, pt = _primary(placebo)
+        _, pt = primary_statistic(placebo)
         checks.append(_check("placebo", np.isfinite(pt) and abs(pt) <= PLACEBO_MAX_ABS_T,
                              f"shuffled-condition |t| = {abs(pt):.2f}"))
         child_specs.append(("skeptic:placebo", s, placebo))
@@ -228,7 +228,7 @@ def critique(spec: dict, results: dict, *, reg: R.Registry, family_id: str,
                 falsification="parent finding must survive this variant",
                 spec=cspec, data_version=data_version,
                 parent_id=exp_id, trial_kind="skeptic")
-            eff, _t = _primary(cres)
+            eff, _t = primary_statistic(cres)
             reg.record_result(cid, cres, sharpe=cres.get("sharpe"), dsr=None)
 
     failed = [c for c in checks if c["fatal"] and not c["passed"]]
