@@ -58,8 +58,10 @@ def load_wide(*, embargo: bool = False, lag_days: int = 0, all_data: bool = Fals
     already-frozen specs (see panel.load_all).
     """
     p = panel_mod.load_all() if all_data else panel_mod.load(embargo=embargo)
+    if "index" not in p.columns:          # panels built before tiers existed
+        p = p.with_columns(pl.lit("sp500").alias("index"))
     tags = p["tag"].unique().to_list()
-    base = (p.select(["asof", "ticker", "cik", "gics_sector"])
+    base = (p.select(["asof", "ticker", "cik", "gics_sector", "index"])
              .unique(subset=["asof", "ticker"]))
     for tag in tags:
         sub = (p.filter(pl.col("tag") == tag)
@@ -254,6 +256,11 @@ def run_cross_sectional(spec: dict, wide: pl.DataFrame, *,
                 f"registered lag_days={s['lag_days']}; rebuild with "
                 f"load_wide(lag_days={s['lag_days']})")
 
+    # The spec's universe is binding. Registrations default to sp500_pit, so a
+    # wider panel does not retroactively change what an older hypothesis meant.
+    tiers = spec_mod.UNIVERSES[s["universe"]]
+    if "index" in wide.columns:
+        wide = wide.filter(pl.col("index").is_in(list(tiers)))
     df = wide.with_columns(eval_expr(s["signal"]).alias("signal"))
     all_dates = sorted(df["asof"].unique().to_list())
     if s.get("start"):
@@ -499,6 +506,11 @@ def run_event_study(spec: dict, *, events_path=paths.EVENTS,
     series = _prepared_series(prices_path)
 
     # cik -> membership intervals, sector, price ticker
+    # Same binding rule as the cross-sectional engine: an event only counts if
+    # the issuer was in the spec's universe tier when it filed.
+    tiers = spec_mod.UNIVERSES[s["universe"]]
+    if "index" in uni.columns:
+        uni = uni.filter(pl.col("index").is_in(list(tiers)))
     uni_rows = uni.rows(named=True)
     by_cik: dict[str, list[dict]] = {}
     for r in uni_rows:

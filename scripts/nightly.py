@@ -83,7 +83,8 @@ def refresh_data() -> str:
 
 def forward_grade(reg: R.Registry, data_version: str) -> bool:
     """Re-run surviving specs on rebalances that postdate their registration."""
-    live = reg.by_verdict(R.VAULT) + reg.by_verdict(R.SURVIVED_DISCOVERY)
+    live = (reg.by_verdict(R.VAULT) + reg.by_verdict(R.SURVIVED_DISCOVERY)
+            + reg.by_verdict(R.WATCH))
     if not live:
         log("no surviving specs to forward-grade")
         return True
@@ -135,6 +136,9 @@ def forward_grade(reg: R.Registry, data_version: str) -> bool:
                 "summary": summary, "data_version": data_version})
             log(f"  {row['id']}: {summary}")
 
+            # Only a promoted strategy can be demoted. A WATCH entry is already
+            # a failure being observed; there is nothing to demote it from, and
+            # marking it DEMOTED would wrongly imply it once passed.
             if decayed and row["verdict"] == R.VAULT:
                 reg.record_verdict(row["id"], R.DEMOTED,
                                    f"forward performance decayed: {summary}")

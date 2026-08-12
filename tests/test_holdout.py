@@ -39,6 +39,16 @@ def test_only_survivors_may_be_taken_to_the_embargo(reg):
     assert reg.get(failed)["holdout_touches"] == 0     # a refusal costs nothing
 
 
+def test_a_watched_candidate_cannot_buy_an_embargo_look(reg):
+    """WATCH accumulates forward evidence for a FAILED candidate. It must not
+    become a side door to the embargo -- that would be relaxing the floor by
+    another name."""
+    e = _candidate(reg, verdict=R.WATCH)
+    with pytest.raises(ValueError, match="SURVIVED_DISCOVERY"):
+        holdout.query(e, reg=reg)
+    assert reg.get(e)["holdout_touches"] == 0
+
+
 def test_unknown_experiment_raises(reg):
     with pytest.raises(KeyError):
         holdout.query("exp_nope", reg=reg)

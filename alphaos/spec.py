@@ -48,6 +48,26 @@ BINARY_OPS = {"add", "sub", "mul", "div"}
 
 NEUTRALIZERS = {"sector", "size", "beta"}
 
+# Point-in-time universes, and which index tiers each admits. This field used to
+# be validated, normalised and then ignored, which was harmless while only one
+# universe existed -- but the moment a wider panel is built, an ignored universe
+# field silently redefines every hypothesis already in the ledger. Registrations
+# default to sp500_pit, so adding the MidCap tier leaves their meaning untouched.
+# sp900_pit (S&P 500 + MidCap 400) was built and then REJECTED by its own
+# coverage gate, so the validator refuses it rather than letting a hypothesis
+# quietly run on a universe that cannot be tested honestly. Yahoo has no price
+# history for most mid-caps that delisted: measured coverage of point-in-time
+# S&P 400 membership was 64-76% from 2012 to 2019, a survivorship hole three
+# times the large-cap one. See campaigns/_universe-expansion/postmortem.md.
+#
+# The machinery stays parameterised (ingest/universe.py builds any index from
+# Wikipedia revision history, and the panel carries an `index` tier), so
+# re-enabling this is one line once a price source with delisted coverage
+# exists. It is a data problem, not a code problem.
+UNIVERSES = {
+    "sp500_pit": ("sp500",),            # large caps only
+}
+
 TRIGGERS = {
     "8k_2.02": "8-K item 2.02 -- results of operations (the earnings release)",
     "8k_1.01": "8-K item 1.01 -- entry into a material agreement",
@@ -118,8 +138,8 @@ def _check_expr(node: Any, path: str = "signal") -> None:
 def _check_common(spec: dict):
     _require(spec.get("predicted_sign") in (1, -1),
              "predicted_sign must be +1 or -1 and is binding on the verdict")
-    _require(spec.get("universe", "sp500_pit") == "sp500_pit",
-             "universe must be sp500_pit (the only point-in-time universe built)")
+    _require(spec.get("universe", "sp500_pit") in UNIVERSES,
+             f"universe must be one of {sorted(UNIVERSES)}")
     lag = spec.get("lag_days", 0)
     _require(isinstance(lag, int) and 0 <= lag <= 21, "lag_days must be 0..21")
 
@@ -160,7 +180,8 @@ def validate(spec: dict) -> dict:
         out = dict(spec)
         out.update({"rebalance": rb, "horizon_days": horizon, "cost_bps": cost,
                     "neutralize": sorted(neut), "winsorize": wins, "min_names": mn,
-                    "lag_days": spec.get("lag_days", 0), "universe": "sp500_pit"})
+                    "lag_days": spec.get("lag_days", 0),
+                "universe": spec.get("universe", "sp500_pit")})
         return out
 
     unknown = set(spec) - _EV_KEYS
@@ -201,7 +222,8 @@ def validate(spec: dict) -> dict:
 
     out = dict(spec)
     out.update({"window": win, "benchmark": bm, "min_events": me, "condition": cond,
-                "lag_days": spec.get("lag_days", 0), "universe": "sp500_pit"})
+                "lag_days": spec.get("lag_days", 0),
+                "universe": spec.get("universe", "sp500_pit")})
     return out
 
 

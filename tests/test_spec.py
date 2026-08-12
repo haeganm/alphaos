@@ -43,6 +43,24 @@ def test_overlapping_holding_periods_are_refused():
     assert ok["horizon_days"] == 63
 
 
+def test_universe_defaults_to_sp500_and_is_preserved():
+    """It used to be validated, normalised and then ignored by both engines.
+    That was harmless with one universe and would silently redefine every
+    recorded hypothesis the moment a second one existed."""
+    assert S.validate(BASE)["universe"] == "sp500_pit"
+    assert S.validate(dict(BASE, universe="sp500_pit"))["universe"] == "sp500_pit"
+
+
+def test_a_universe_that_failed_its_coverage_gate_is_refused():
+    """sp900_pit was built and rejected at 64-76% price coverage. The validator
+    refuses it rather than letting a hypothesis run on a universe that cannot
+    be tested honestly."""
+    with pytest.raises(S.SpecError, match="universe must be one of"):
+        S.validate(dict(BASE, universe="sp900_pit"))
+    with pytest.raises(S.SpecError, match="universe must be one of"):
+        S.validate(dict(BASE, universe="russell3000"))
+
+
 def test_market_feature_cannot_be_given_a_quarterly_lag():
     with pytest.raises(S.SpecError, match="no quarterly lags"):
         S.validate(dict(BASE, signal={"feature": "mom_12_1", "lag": 2}))

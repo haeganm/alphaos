@@ -278,14 +278,28 @@ def market_table(prices: pl.DataFrame, dates: list[date], *, lag_days: int = 0,
 # ---------------------------------------------------------------------------
 
 def _membership_rows(universe: pl.DataFrame, dates: list[date]) -> pl.DataFrame:
+    """One row per (rebalance, ticker) with the index tier it belonged to.
+
+    The tier is carried so a spec can say which universe it means. A name
+    caught mid-promotion can match both tiers on a boundary date; sp500 wins,
+    because a duplicated ticker would double-weight that name in the
+    cross-section.
+    """
+    has_index = "index" in universe.columns
     rows = []
     for d in dates:
         m = universe.filter((pl.col("start") <= d) &
                             (pl.col("end").is_null() | (pl.col("end") > d)))
-        for t, c, s in zip(m["ticker"], m["cik"], m["gics_sector"]):
-            rows.append({"asof": d, "ticker": t, "cik": c, "gics_sector": s})
-    return pl.DataFrame(rows, schema={"asof": pl.Date, "ticker": pl.Utf8,
-                                      "cik": pl.Utf8, "gics_sector": pl.Utf8})
+        cols = ["ticker", "cik", "gics_sector"] + (["index"] if has_index else [])
+        for r in m.select(cols).rows(named=True):
+            rows.append({"asof": d, "ticker": r["ticker"], "cik": r["cik"],
+                         "gics_sector": r["gics_sector"],
+                         "index": r.get("index", "sp500")})
+    df = pl.DataFrame(rows, schema={"asof": pl.Date, "ticker": pl.Utf8,
+                                    "cik": pl.Utf8, "gics_sector": pl.Utf8,
+                                    "index": pl.Utf8})
+    return (df.sort(["asof", "ticker", "index"])          # sp400 < sp500 alphabetically
+              .unique(subset=["asof", "ticker"], keep="last"))
 
 
 def data_version(artifacts: list) -> str:

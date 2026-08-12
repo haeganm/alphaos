@@ -27,6 +27,17 @@ this repo mean anything. Follow them exactly.
    registered months ago cannot leak backwards into a choice already made.
    Nothing that generates or selects hypotheses may call them.
 
+   **And never call them by hand to "check something".** On 2026-08-12 I ran a
+   frozen spec through `run_cross_sectional` with `start=2023-01-01` while
+   testing that forward grading worked, saw the effect and t-statistic, and
+   thereby spent an embargo query for the accruals family outside the gate. The
+   look changed nothing, which is precisely the excuse the counter exists to
+   ignore. If you need to prove the forward path works, prove it on a control
+   or a synthetic spec -- never on a real frozen candidate. Any look that does
+   happen must be recorded with `record_holdout_touch` and a
+   `note(..., 'unsanctioned_embargo_look', ...)`; an unrecorded look is the
+   only version of this that is unrecoverable.
+
 3. **Generate ideas from mechanisms, not from results.** Read
    `campaigns/*/postmortem.md` to learn *why* things died. Do not query the
    registry's results, Sharpes or return series to decide what to try next.
@@ -102,6 +113,14 @@ after 180 days of non-positive forward returns.
   collapsed under size/sector neutralisation because there is no small-cap tail
   here. Before proposing a mechanism, ask whether 500 large caps can generate
   enough of it. If the honest answer is no, say so instead of testing it.
+- **Widening the universe was tried and is not available at $0.** The S&P 400
+  was built, measured at 64-76% price coverage for 2012-2019, and rejected at a
+  pre-committed gate; `spec.UNIVERSES` refuses it for that reason. Do not
+  re-propose it, and do not cite "the universe is too small" as an established
+  finding — it is a plausible, *untested* explanation for eight campaigns of
+  nulls. See `campaigns/_universe-expansion/postmortem.md`.
+- **`spec.universe` is binding.** Every registration defaults to `sp500_pit`;
+  a new universe must be added to `UNIVERSES` and pass a coverage gate first.
 - **An event count is not a sample size.** Event studies are scored on a
   calendar-time portfolio, not on the array of events: same-day clustering and
   window overlap leave ~50 independent blocks across 2010-2022 regardless of

@@ -30,6 +30,21 @@ from .. import paths
 
 API = "https://en.wikipedia.org/w/api.php"
 PAGE = "List of S&P 500 companies"
+
+# Index name -> Wikipedia page. The same revision-history reconstruction works
+# for any index whose page carries a constituents table, which is what makes a
+# wider universe reachable at all: EDGAR blanks a company's `tickers` field the
+# moment it stops filing (Carefusion and Monsanto both return []), so there is
+# no free path from a dead CIK back to its historical ticker. Wikipedia's
+# history is the only free record of who was in an index and under what symbol.
+#
+# The S&P 600 is deliberately absent. Its page has no usable history before
+# 2018-08 and the current table defeats _parse_constituents; a 2018+ universe
+# would overlap the embargo and could not support a discovery window.
+INDEX_PAGES = {
+    "sp500": "List of S&P 500 companies",
+    "sp400": "List of S&P 400 companies",
+}
 SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SNAPSHOT_CACHE = paths.WIKI_SNAPSHOTS
 START_YEAR = 2010
@@ -56,9 +71,9 @@ def _quarter_starts() -> list[date]:
     return out
 
 
-def _first_revision_at_or_after(d: date) -> dict | None:
+def _first_revision_at_or_after(d: date, page: str = PAGE) -> dict | None:
     r = http.get_json(
-        f"{API}?action=query&prop=revisions&titles={quote(PAGE)}"
+        f"{API}?action=query&prop=revisions&titles={quote(page)}"
         f"&rvlimit=1&rvdir=newer&rvstart={d.isoformat()}T00:00:00Z"
         f"&rvprop=ids|timestamp&format=json&formatversion=2")
     pages = r.get("query", {}).get("pages", [])
@@ -123,7 +138,8 @@ def _parse_constituents(html: str) -> list[dict]:
     return out
 
 
-def fetch_snapshots(cache_path=SNAPSHOT_CACHE, refresh: bool = False) -> list[dict]:
+def fetch_snapshots(cache_path=SNAPSHOT_CACHE, refresh: bool = False,
+                    wiki_page: str = PAGE) -> list[dict]:
     """One parsed constituents snapshot per quarter since START_YEAR."""
     cache = {}
     if os.path.exists(cache_path) and not refresh:
@@ -136,7 +152,7 @@ def fetch_snapshots(cache_path=SNAPSHOT_CACHE, refresh: bool = False) -> list[di
         if key in cache:
             snapshots.append(cache[key])
             continue
-        rev = _first_revision_at_or_after(q)
+        rev = _first_revision_at_or_after(q, wiki_page)
         if rev is None:
             continue
         page = http.get_json(
@@ -250,11 +266,18 @@ def resolve_price_tickers(df: pl.DataFrame, price_spans: dict[str, tuple[date, d
     return out, sorted(accepted)
 
 
-def members_on(df: pl.DataFrame, d: date) -> list[str]:
-    """Tickers in the index on date d. The only sanctioned way to ask."""
-    return df.filter(
-        (pl.col("start") <= d) & (pl.col("end").is_null() | (pl.col("end") > d))
-    )["ticker"].to_list()
+def members_on(df: pl.DataFrame, d: date, index: str | None = None) -> list[str]:
+    """Tickers in the universe on date d. The only sanctioned way to ask.
+
+    Deduplicated: with several indices unioned, a name caught mid-promotion can
+    legitimately match twice on a boundary date, and a duplicated ticker would
+    quietly double-weight that name in any cross-section built from this list.
+    """
+    m = df.filter((pl.col("start") <= d) &
+                  (pl.col("end").is_null() | (pl.col("end") > d)))
+    if index is not None:
+        m = m.filter(pl.col("index") == index)
+    return m["ticker"].unique().to_list()
 
 
 def coverage_report(df: pl.DataFrame) -> dict:
@@ -270,13 +293,37 @@ def coverage_report(df: pl.DataFrame) -> dict:
     }
 
 
-def build(out_path=paths.UNIVERSE, refresh: bool = False) -> pl.DataFrame:
-    snaps = fetch_snapshots(refresh=refresh)
-    df = attach_ciks(build_membership(snaps))
+def build_index(index: str, refresh: bool = False) -> pl.DataFrame:
+    """Membership intervals for one index, tagged with which index they are."""
+    page = INDEX_PAGES[index]
+    # sp500 keeps the original cache filename so the 66 snapshots already
+    # fetched are not re-downloaded.
+    cache = (paths.WIKI_SNAPSHOTS if index == "sp500"
+             else paths.CACHE / f"wiki_snapshots_{index}.json")
+    snaps = fetch_snapshots(cache_path=cache, refresh=refresh, wiki_page=page)
+    df = build_membership(snaps).with_columns(pl.lit(index).alias("index"))
+    rep = coverage_report(df)
+    print(f"{index}: {rep['distinct_tickers']} distinct tickers over {len(snaps)} "
+          f"snapshots, {rep['ever_left']} departures recorded")
+    print(f"  members by year: {rep['members_by_year']}")
+    return df
+
+
+def build(out_path=paths.UNIVERSE, refresh: bool = False,
+          indices=("sp500", "sp400")) -> pl.DataFrame:
+    """Union of the requested indices, one row per (ticker, membership span).
+
+    A name that graduates from the MidCap to the S&P 500 appears once per
+    index with non-overlapping spans, which is correct: it was a mid-cap then
+    and a large-cap now, and a campaign that splits on `index` must see that
+    change rather than a single lifetime label.
+    """
+    frames = [build_index(i, refresh=refresh) for i in indices]
+    df = attach_ciks(pl.concat(frames)).sort(["ticker", "start"])
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     df.write_parquet(out_path)
     rep = coverage_report(df)
-    print(f"universe: {rep['distinct_tickers']} distinct tickers over {len(snaps)} snapshots, "
-          f"{rep['cik_coverage_pct']}% with CIK, {rep['ever_left']} departures recorded")
+    print(f"universe: {rep['distinct_tickers']} distinct tickers across "
+          f"{len(frames)} indices, {rep['cik_coverage_pct']}% with CIK")
     print(f"  members by year: {rep['members_by_year']}")
     return df

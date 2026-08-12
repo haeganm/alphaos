@@ -174,6 +174,20 @@ def test_panel_built_at_a_different_lag_is_refused():
         harness.run_cross_sectional(dict(SPEC, lag_days=5), _panel())
 
 
+def test_universe_tier_is_binding_on_the_cross_section():
+    """A wider panel must not silently enlarge an older hypothesis. Rows outside
+    the spec's tier are excluded before the signal is even computed."""
+    p = _panel()
+    tagged = p.with_columns(
+        pl.when(pl.col("ticker") < "T030").then(pl.lit("sp500"))
+          .otherwise(pl.lit("sp400")).alias("index"))
+    res = harness.run_cross_sectional(SPEC, tagged)          # defaults sp500_pit
+    assert res["mean_names"] == 30, "mid-cap rows must not enter an sp500 spec"
+
+    untagged = harness.run_cross_sectional(SPEC, p)
+    assert untagged["mean_names"] == 60                       # no tiers, no filter
+
+
 def test_shuffled_signal_destroys_the_edge():
     real = harness.run_cross_sectional(SPEC, _panel())
     placebo = harness.run_cross_sectional(SPEC, _panel(), shuffle_seed=7)

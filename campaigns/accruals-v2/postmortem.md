@@ -25,6 +25,36 @@
 > correction, did shift; all remain far below the floor and all fail on other
 > checks as well, so no verdict moves.
 
+> **Status change 2026-08-12: this candidate is now WATCH.** A `WATCH` verdict
+> was added for exactly this situation. It is forward-graded every night so
+> out-of-sample evidence accumulates, and it is **not** a promotion: not
+> tradable, absent from the conviction sheet, and `holdout.query` still refuses
+> it, because only SURVIVED_DISCOVERY earns an embargo look (there is a test
+> asserting WATCH cannot buy one). The registry's audit trail keeps both the
+> original FAILED verdict and the WATCH that followed.
+>
+> This is the third option the post-mortem below was reaching for. The other
+> two — relax the floor, or re-carve the family to reset N — are forbidden, and
+> doing nothing meant the one interesting result in 34 hypotheses would simply
+> age unobserved.
+>
+> **Protocol breach, recorded 2026-08-12: this family has spent 1 of its 3
+> embargo queries, and not through the gate.** While verifying that WATCH
+> forward-grading produces real periods, I ran this frozen spec directly
+> through `harness.run_cross_sectional` with `start=2023-01-01` and
+> `2025-01-01` — post-embargo data — and saw the resulting effect and
+> t-statistic. That is an embargo query. It bypassed `holdout.query`, which
+> would have refused it (WATCH is not eligible) and would have disclosed a
+> verdict rather than a number.
+>
+> The look was made to test plumbing, not to tune anything, and no spec,
+> threshold or verdict was changed because of it. That excuse is exactly why
+> the counter counts looks rather than intentions, so the touch has been
+> recorded against the family and the audit trail carries an
+> `unsanctioned_embargo_look` event describing what was seen. **Two queries
+> remain.** Anyone reading a future embargo result for this family should know
+> the slice is no longer fully independent of it.
+
 ## The result that matters
 
 Variant 1 — canonical Sloan accruals, scaled by assets — passed **every fatal

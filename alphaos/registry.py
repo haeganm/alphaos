@@ -35,7 +35,19 @@ FAILED = "FAILED"
 SURVIVED_DISCOVERY = "SURVIVED_DISCOVERY"
 VAULT = "VAULT"
 DEMOTED = "DEMOTED"
-VERDICTS = {FAILED, SURVIVED_DISCOVERY, VAULT, DEMOTED}
+# A failed candidate kept under observation. WATCH is forward-graded nightly so
+# out-of-sample evidence accumulates, but it is NOT a promotion: it never
+# reaches the conviction sheet and holdout.query still refuses it, because only
+# SURVIVED_DISCOVERY earns an embargo look.
+#
+# It exists for one specific situation -- canonical Sloan accruals passed every
+# check except the deflated Sharpe, and its post-mortem says what it needs is
+# out-of-sample time rather than more variants. Without WATCH the only ways to
+# act on that would be to relax the floor or to re-carve the family, both of
+# which the protocol forbids. This is the honest third option: leave the verdict
+# FAILED, and let the future decide.
+WATCH = "WATCH"
+VERDICTS = {FAILED, SURVIVED_DISCOVERY, VAULT, DEMOTED, WATCH}
 
 # Fields fixed at registration. Nothing in this module updates them; the test
 # suite asserts it stays that way.

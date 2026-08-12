@@ -95,11 +95,19 @@ whole discovery span. Inference now runs on a calendar-time portfolio (Fama
 from t = 2.81 to t = 0.88 and removed a t = 2.06 governance "finding"
 entirely. Both had previously been described here as near-misses; neither was.
 
-**The universe is the binding constraint, not the mechanisms.** Rare-disclosure
-events (243 impairments, 74 auditor changes) and insider cluster buys (1,030 in
-17 years) fail for want of events, not want of effect. Asset growth collapsed
-sixfold under size/sector neutralisation because the S&P 500 has no small-cap
-tail for it to work in.
+**The universe is probably the binding constraint — and that could not be
+tested.** Rare-disclosure events (243 impairments, 74 auditor changes) and
+insider cluster buys (1,030 in 17 years) fail for want of events, not want of
+effect. Asset growth collapsed sixfold under size/sector neutralisation because
+the S&P 500 has no small-cap tail. An attempt to widen to the S&P 400 MidCap
+was built and then **rejected at its own pre-committed coverage gate**: Yahoo
+has no history for most mid-caps that delisted, so point-in-time coverage runs
+64-76% from 2012 to 2019, and EDGAR blanks a company's ticker once it stops
+filing so there is no free way to recover it. The diagnosis stays plausible and
+stays unverified. See `campaigns/_universe-expansion/postmortem.md` — it also
+puts a price on the fix (~$40/month for delisting-covered prices) and notes the
+one route that stays open at $0: mid-cap coverage is 99.6% *today*, so a study
+that accumulates forward rather than backfilling would be clean.
 
 **The placebo earns its keep repeatedly.** It killed an earnings-drift result
 and an insider result by showing that random-date events drift just as much.
