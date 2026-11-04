@@ -1,5 +1,7 @@
 # AlphaOS
 
+[![CI](https://github.com/haeganm/alphaos/actions/workflows/ci.yml/badge.svg)](https://github.com/haeganm/alphaos/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A personal quantitative research laboratory. Claude proposes hypotheses as
 declarative specs; deterministic Python tests them on point-in-time data; a
 skeptic tries to kill the survivors; every trial is recorded in an append-only
