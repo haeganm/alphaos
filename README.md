@@ -8,7 +8,7 @@ skeptic tries to kill the survivors; every trial is recorded in an append-only
 ledger that knows how many things have been tried.
 
 The product is not a trading strategy. It is the accumulating record of what
-was tested, what died, at which check, and why — so that findings are scored
+was tested, what died, at which check, and why - so that findings are scored
 against the honest size of the search that produced them.
 
 Runs on free data. Total cost: $0.
@@ -31,23 +31,23 @@ these numbers mean something.
 
 ## Data (all free)
 
-- **Fundamentals** — SEC XBRL company facts, 758k facts across 757 companies,
+- **Fundamentals**: SEC XBRL company facts, 758k facts across 757 companies,
   each stamped with its filing date. Restatements are kept as separate rows.
-- **Universe** — S&P 500 membership reconstructed from Wikipedia revision
+- **Universe**: S&P 500 membership reconstructed from Wikipedia revision
   history, quarterly since 2010: **889 distinct tickers** versus 503 today.
   That difference is the survivorship bias removed.
-- **Prices** — Yahoo daily adjusted, 5.6M bars, 693 tickers. 33 ticker renames
+- **Prices**: Yahoo daily adjusted, 5.6M bars, 693 tickers. 33 ticker renames
   resolved through CIK continuity (UTX→RTX, ANTM→ELV…), accepted only when the
   target's history spans the old name's membership so bankruptcies are not
   spliced.
-- **Events** — 297k filings (219k 8-Ks) with EDGAR acceptance timestamps.
-- **Insiders** — 1.32M Form 4 transactions, 753 issuers, 2009→present, from
+- **Events**: 297k filings (219k 8-Ks) with EDGAR acceptance timestamps.
+- **Insiders**: 1.32M Form 4 transactions, 753 issuers, 2009→present, from
   SEC's quarterly bulk data sets (~64 zips rather than the 500k-700k
   per-filing requests the naive route needs). Every transaction code,
   ownership type and reporting-owner role, with acceptance timestamps joined
-  from the submissions API at 100% coverage — so an event is dated by when the
+  from the submissions API at 100% coverage - so an event is dated by when the
   filing became public, never by when the trade happened.
-- **Factors** — Fama-French 3 + momentum, daily.
+- **Factors**: Fama-French 3 + momentum, daily.
 
 ## Verified, not asserted
 
@@ -59,7 +59,7 @@ these numbers mean something.
   **100% entry-date agreement, correlation 0.9988–0.9995**, median difference
   0.00000. Run `python scripts/crossval_asof.py`.
 - **The lab can say no.** Random noise, ticker-letter sorts, and near-constant
-  signals all reach FAILED — even when granted the sign they happened to
+  signals all reach FAILED - even when granted the sign they happened to
   produce, so they cannot die on the sign check alone.
 - **The lab can say yes.** A planted predictive signal reaches
   SURVIVED_DISCOVERY through the full battery. A skeptic that kills everything
@@ -91,13 +91,13 @@ Four patterns worth more than any single verdict:
 
 **Event counts are not sample sizes.** Item 2.02 produces 48,276 events on
 4,014 distinct dates, and a 61-day window makes every event overlap every other
-one filed within three months — roughly **fifty independent blocks** across the
+one filed within three months - roughly **fifty independent blocks** across the
 whole discovery span. Inference now runs on a calendar-time portfolio (Fama
 1998) rather than on the event array. This cut the best earnings-drift result
 from t = 2.81 to t = 0.88 and removed a t = 2.06 governance "finding"
 entirely. Both had previously been described here as near-misses; neither was.
 
-**The universe is probably the binding constraint — and that could not be
+**The universe is probably the binding constraint - and that could not be
 tested.** Rare-disclosure events (243 impairments, 74 auditor changes) and
 insider cluster buys (1,030 in 17 years) fail for want of events, not want of
 effect. Asset growth collapsed sixfold under size/sector neutralisation because
@@ -106,7 +106,7 @@ was built and then **rejected at its own pre-committed coverage gate**: Yahoo
 has no history for most mid-caps that delisted, so point-in-time coverage runs
 64-76% from 2012 to 2019, and EDGAR blanks a company's ticker once it stops
 filing so there is no free way to recover it. The diagnosis stays plausible and
-stays unverified. See `campaigns/_universe-expansion/postmortem.md` — it also
+stays unverified. See `campaigns/_universe-expansion/postmortem.md` - it also
 puts a price on the fix (~$40/month for delisting-covered prices) and notes the
 one route that stays open at $0: mid-cap coverage is 99.6% *today*, so a study
 that accumulates forward rather than backfilling would be clean.
@@ -116,7 +116,7 @@ and an insider result by showing that random-date events drift just as much.
 Any event study here must be read against it, never against the benchmark alone.
 
 **Accruals is the standing candidate, and now the only one.** It passed every
-check except the multiple-testing hurdle, with a factor-model R² of 0.067 —
+check except the multiple-testing hurdle, with a factor-model R² of 0.067:
 almost none of it is factor exposure. It is cross-sectional, so the
 calendar-time correction does not touch it: its 150 monthly periods were
 already non-overlapping and sequential by construction. Had it been registered
@@ -130,8 +130,8 @@ BTCTA, MYOWNTA and Density Desk. All four found no edge; that is the prior this
 lab was calibrated against, and eight campaigns later it still holds.
 
 Post-mortems carry revision notes rather than edits. The earnings campaign has
-been revised three times — event ordering, then the placebo reading, then
-calendar-time inference — and its verdict was 0 of 4 on every pass. The
+been revised three times - event ordering, then the placebo reading, then
+calendar-time inference - and its verdict was 0 of 4 on every pass. The
 verdicts have never changed; the reasons have been wrong twice, and both
 corrections are recorded in place.
 
@@ -146,7 +146,7 @@ corrections are recorded in place.
   earnings 8-Ks) because an event only enters the sample if the name has price
   history afterwards. Always read event results against the placebo.
 - **Quarterly fundamentals** cannot support faster than monthly rebalancing.
-- **Holding periods may not overlap** — `spec.py` enforces horizon == interval
+- **Holding periods may not overlap**: `spec.py` enforces horizon == interval
   so every Sharpe and t-stat assumes independent periods honestly.
 - **`mktcap` is sparser than prices**; size neutralisation falls back to the
   cross-sectional mean where `SharesOutstanding` is missing.
@@ -168,7 +168,7 @@ python scripts/backup_registry.py       # mirror the ledger to committed CSV
 
 Nightly. `schtasks /create` cannot set a working directory, and without one the
 task starts in `System32`; paths resolve absolutely via `alphaos/paths.py`
-regardless, but set it anyway. Never wrap this in a `.cmd` — it flashes a
+regardless, but set it anyway. Never wrap this in a `.cmd` - it flashes a
 console window.
 
 ```powershell
@@ -180,4 +180,4 @@ Register-ScheduledTask -TaskName AlphaOS-nightly -Action $a -Trigger $t -Force
 
 `data/` is gitignored and every parquet in it is re-derivable from the network.
 The experiment ledger is not, so `registry_export/` mirrors it to committed CSV
-on every nightly run — losing it would silently reset the embargo touch counts.
+on every nightly run - losing it would silently reset the embargo touch counts.
