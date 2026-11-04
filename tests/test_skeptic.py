@@ -20,6 +20,18 @@ def reg(tmp_path):
     r.close()
 
 
+@pytest.fixture(autouse=True)
+def _placebo_without_data(monkeypatch):
+    """The placebo rerun reads data/events.parquet, which is gitignored, so a
+    fresh clone could not run these. They pin the verdict partition, not the
+    placebo, so hand them a clean one. test_an_unrunnable_placebo_is_fatal
+    patches over this with its own failing placebo."""
+    monkeypatch.setattr(
+        skeptic.harness, "run_event_study",
+        lambda *a, **k: {"engine": "event_study",
+                         "calendar_effect": 0.0, "t_bhar": 0.3})
+
+
 def _results(mean=0.01, n=400, seed=0, **over):
     rng = np.random.default_rng(seed)
     arr = rng.normal(mean, 0.02, n)
