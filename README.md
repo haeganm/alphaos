@@ -159,7 +159,7 @@ corrections are recorded in place.
 ```bash
 python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
 python scripts/build_data.py            # cold build, ~30-60 min
-python -m pytest tests/ -q              # 78 tests, runs from any directory
+python -m pytest tests/ -q              # 107 tests, runs from any directory
 python -c "from alphaos import controls; print(controls.report(controls.run_all()))"
 python scripts/run_campaign.py campaigns/<name>/campaign.json
 python scripts/crossval_asof.py         # external oracle check
